@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Platform, Keyboard } from 'react-native';
+import { Platform, Keyboard, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { validateUrl } from '../utils/urlValidation';
 import { classifyMessage, groupUnclassifiedMessages } from '../utils/messageClassification';
-import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession } from '../utils/sessionManager';
-import { fetchProjects, fetchSessionsForProject } from '../utils/projectManager';
+import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession, deleteSession } from '../utils/sessionManager';
+import { fetchProjects, fetchSessionsForProject, fetchModels, saveLastSelectedModel, loadLastSelectedModel } from '../utils/projectManager';
+import { getRequestHeaders } from '../utils/requestUtils';
+import notificationService from '../utils/notificationService';
 import '../utils/opencode-types.js';
 
 // Import react-native-sse as default export (package uses module.exports)
@@ -14,13 +17,24 @@ import EventSource from 'react-native-sse';
  * @param {string} initialUrl - Initial SSE endpoint URL
  * @returns {Object} - SSE connection state and methods
  */
+// Helper function to update or add a message to the events array
+const updateOrAddMessage = (prevEvents, newMessage) => {
+  // For now, just append the new message (assuming messages are unique or order matters)
+  return [...prevEvents, newMessage];
+};
+
 // Helper function to process opencode messages with classification
-const processOpencodeMessage = (item, setUnclassifiedMessages) => {
+const processOpencodeMessage = (item, setUnclassifiedMessages, setTodos) => {
   const classifiedMessage = classifyMessage(item);
 
   // Track unclassified messages separately
   if (classifiedMessage.category === 'unclassified') {
     setUnclassifiedMessages(prev => [...prev, classifiedMessage]);
+  }
+
+  // Update todos if this is a todo update
+  if (classifiedMessage.type === 'todo_updated') {
+    setTodos(classifiedMessage.todos);
   }
 
   return classifiedMessage;
@@ -45,10 +59,31 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
   /** @type {import('./opencode-types.js').Session|null} */
   const [selectedSession, setSelectedSession] = useState(null);
   const [isSessionBusy, setIsSessionBusy] = useState(false);
+  const [todos, setTodos] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+
+  // Load last successful URL on mount
+  useEffect(() => {
+    const loadLastUrl = async () => {
+      try {
+        const lastUrl = await AsyncStorage.getItem('lastSuccessfulUrl');
+        if (lastUrl) {
+          setInputUrl(lastUrl);
+        }
+      } catch (error) {
+        console.error('Failed to load last URL:', error);
+      }
+    };
+    loadLastUrl();
+  }, []);
   const [baseUrl, setBaseUrl] = useState(null);
-  const eventSourceRef = useRef(null);
-  const messageCounterRef = useRef(0); // Unique message ID counter
-  const selectedSessionRef = useRef(null); // Ref to track selectedSession for SSE callbacks
+  const [appState, setAppState] = useState(AppState.currentState);
+   const eventSourceRef = useRef(null);
+   const messageCounterRef = useRef(0); // Unique message ID counter
+   const selectedSessionRef = useRef(null); // Ref to track selectedSession for SSE callbacks
+   const projectSessionsRef = useRef(null); // Ref to track projectSessions for notification session lookup
 
   // Generate unique message IDs
   const generateMessageId = () => {
@@ -56,201 +91,187 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     return `msg_${messageCounterRef.current}_${Date.now()}`;
   };
 
-  // Load last message for session context
+  // Load messages for session context
   const loadLastMessage = async (sessionId) => {
     try {
-      console.log('📚 Loading last message for session:', sessionId, 'baseUrl:', baseUrl);
+      console.log('📚 Loading messages for session:', sessionId, 'baseUrl:', baseUrl);
       if (!baseUrl) {
-        console.error('❌ No baseUrl available for loading last message');
+        console.error('❌ No baseUrl available for loading messages');
         setEvents([]);
         return;
       }
 
-      const response = await fetch(`${baseUrl}/session/${sessionId}/message?limit=1`);
+      // Fetch up to 50 messages
+      const response = await fetch(`${baseUrl}/session/${sessionId}/message?offset=0&limit=50`, {
+        headers: getRequestHeaders({}, selectedProject)
+      });
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
+      }
+
       const data = await response.json();
-      console.log('📚 Last message response:', data);
+      console.debug('DEBUG Messages loaded:', data.length, 'messages');
 
       if (data && Array.isArray(data) && data.length > 0) {
-        const message = data[0];
-        console.log('📚 Raw message structure:', message);
+        // Filter messages that contain text content
+        const textMessages = data.filter(message => {
+          if (!message.info || !Array.isArray(message.parts)) return false;
+          return message.parts.some(part => part && part.type === 'text' && part.text && part.text.trim());
+        });
 
-        // Validate message structure
-        if (!message.info || !Array.isArray(message.parts)) {
-          console.warn('📚 Invalid message structure - missing info or parts:', { info: message.info, parts: message.parts });
+        if (textMessages.length > 0) {
+          // Transform and classify each message
+          const transformedEvents = textMessages.map(message => {
+            // Transform API response to SSE-like format
+            const transformedMessage = {
+              ...message,
+              sessionId: sessionId,
+              payload: {
+                type: "message.loaded",
+                properties: {
+                  info: message.info,
+                  parts: message.parts
+                }
+              }
+            };
+
+            // Process the transformed message
+            const classifiedMessage = processOpencodeMessage(transformedMessage, setUnclassifiedMessages, setTodos);
+            console.log('📚 Classified message:', { category: classifiedMessage.category, type: classifiedMessage.type, messageId: classifiedMessage.messageId, role: message.info?.role });
+
+            return {
+              id: generateMessageId(), // UI identifier
+              messageId: classifiedMessage.messageId, // API identifier
+              type: classifiedMessage.type,
+              category: classifiedMessage.category,
+              message: classifiedMessage.displayMessage,
+              projectName: classifiedMessage.projectName,
+              icon: classifiedMessage.icon,
+              sessionId: classifiedMessage.sessionId,
+              mode: classifiedMessage.mode
+            };
+          });
+
+          // Set as initial events (replace any existing), maintaining API order
+          setEvents(transformedEvents);
+        } else {
+          console.log('📚 No text messages found');
           setEvents([]);
-          return;
         }
-
-        // Transform API response to SSE-like format
-        const transformedMessage = {
-          ...message,
-          sessionId: sessionId,
-          payload: {
-            type: "message.loaded",
-            properties: {
-              info: message.info,
-              parts: message.parts
-            }
-          }
-        };
-
-        console.log('📚 Transformed message:', transformedMessage);
-        // Process the transformed message
-        const classifiedMessage = processOpencodeMessage(transformedMessage, setUnclassifiedMessages);
-        console.log('📚 Classified last message:', classifiedMessage);
-
-        // Set as initial events (replace any existing)
-        setEvents([{
-          id: generateMessageId(), // UI identifier
-          messageId: classifiedMessage.messageId, // API identifier
-          type: classifiedMessage.type,
-          category: classifiedMessage.category,
-          message: classifiedMessage.displayMessage,
-          projectName: classifiedMessage.projectName,
-          icon: classifiedMessage.icon,
-          sessionId: classifiedMessage.sessionId
-        }]);
       } else {
-        console.log('📚 No previous messages found');
-        // No previous messages, start empty
+        console.log('📚 No messages received');
         setEvents([]);
       }
     } catch (error) {
-      console.error('❌ Failed to load last message:', error);
+      console.error('❌ Failed to load messages:', error);
       // Don't block session selection, just start with empty chat
       setEvents([]);
     }
   };
 
+  // Load available models from server
+  const loadModels = async () => {
+    if (!baseUrl) return;
+
+    setModelsLoading(true);
+    try {
+      const modelData = await fetchModels(baseUrl, selectedProject);
+      setProviders(modelData.providers);
+
+      // Load last selected model and set it if available
+      const lastModel = await loadLastSelectedModel();
+      if (lastModel) {
+        setSelectedModel(lastModel);
+      } else if (modelData.defaults && Object.keys(modelData.defaults).length > 0) {
+        // Use server defaults if no saved preference
+        const defaultProvider = Object.keys(modelData.defaults)[0];
+        const defaultModel = modelData.defaults[defaultProvider];
+        setSelectedModel({ providerId: defaultProvider, modelId: defaultModel });
+      }
+    } catch (error) {
+      console.error('❌ Failed to load models:', error);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  // Handle model selection
+  const handleModelSelect = async (providerId, modelId) => {
+    const newModel = { providerId, modelId };
+    setSelectedModel(newModel);
+    await saveLastSelectedModel(providerId, modelId);
+  };
+
   // Setup SSE connection for real-time messages
   const setupSSEConnection = () => {
-    try {
-      // Close existing connection if any
-      if (eventSourceRef.current) {
-        try {
-          eventSourceRef.current.close();
-        } catch (e) {
-          // Ignore errors
-        }
+    // Close existing connection if any
+    if (eventSourceRef.current) {
+      try {
+        eventSourceRef.current.close();
+      } catch (e) {
+        // Ignore errors
       }
-
-      // Check if EventSource is available
-      if (typeof EventSource === 'undefined') {
-        setError('Real-time messages not supported on this platform');
-        return;
-      }
-
-      // Use the baseUrl to construct SSE URL
-      const sseUrl = baseUrl + '/global/event';
-      console.log('EventSource created for:', sseUrl);
-      eventSourceRef.current = new EventSource(sseUrl, {
-        headers: {
-          'Accept': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-      });
-      console.log('EventSource readyState after creation:', eventSourceRef.current.readyState);
-
-      eventSourceRef.current.addEventListener("open", (event) => {
-        console.log("🚀 SSE connection opened successfully!");
-        console.log('EventSource readyState:', eventSourceRef.current.readyState);
-        console.log('📡 Real-time connection established');
-      });
-
-      // Helper function to update or add messages
-      const updateOrAddMessage = (events, newMessage) => {
-        // Handle session status messages for busy toggle
-        if (newMessage.payloadType === 'session.status' && newMessage.sessionStatus) {
-          const statusType = newMessage.sessionStatus;
-          const messageSessionId = newMessage.sessionId;
-          const selectedSessionId = selectedSessionRef.current?.id;
-
-          if (messageSessionId === selectedSessionId) {
-            setIsSessionBusy(statusType === 'busy');
-          }
-        }
-
-        // Filter messages by selected session ID if a session is selected
-        const currentSelectedSession = selectedSessionRef.current;
-        console.log(`🔍 SESSION FILTER: message.sessionId=${newMessage.sessionId}, selectedSession.id=${currentSelectedSession?.id}`);
-        if (currentSelectedSession && newMessage.sessionId !== currentSelectedSession.id && newMessage.sessionId !== undefined) {
-          console.log('🚫 FILTERED OUT - session mismatch');
-          return events; // Don't add messages from other sessions
-        }
-
-        // If this is a part update with a message_id, try to find and update
-        if (newMessage.messageId) {
-          const existingIndex = events.findIndex(e => e.messageId === newMessage.messageId);
-          if (existingIndex >= 0) {
-            console.log('🔄 Updating existing message:', newMessage.messageId);
-            // Update existing message
-            return events.map((e, i) =>
-              i === existingIndex
-                ? { ...e, message: newMessage.displayMessage }
-                : e
-            );
-          }
-        }
-        // Otherwise, add as new message
-        console.log('➕ Adding new message:', newMessage.messageId || 'no-id', 'type:', newMessage.type);
-        return [...events, {
-          id: generateMessageId(), // UI identifier
-          messageId: newMessage.messageId, // API identifier for updates
-          type: newMessage.type,
-          category: newMessage.category,
-          message: newMessage.displayMessage,
-          projectName: newMessage.projectName,
-          icon: newMessage.icon,
-          sessionId: newMessage.sessionId // Store session ID for filtering
-        }];
-      };
-
-      let messageCount = 0;
-      eventSourceRef.current.addEventListener("message", (event) => {
-        messageCount++;
-        console.log(`🎉 SSE MESSAGE #${messageCount} RECEIVED!`);
-
-        const rawMessage = event.data;
-        console.log('🔍 Raw SSE message:', rawMessage.substring(0, 200) + '...');
-        try {
-          const data = JSON.parse(rawMessage);
-          console.log('✅ JSON parsing successful, processing message(s)...');
-
-          if (Array.isArray(data)) {
-            console.log(`📦 Processing array of ${data.length} messages`);
-            data.forEach((item, index) => {
-              console.log(`🔄 Processing message ${index + 1}/${data.length}`);
-              const classifiedMessage = processOpencodeMessage(item, setUnclassifiedMessages);
-              console.log('📊 Classified:', classifiedMessage.type, classifiedMessage.category);
-              setEvents(prev => updateOrAddMessage(prev, classifiedMessage));
-            });
-          } else {
-            console.log('📦 Processing single message');
-            const classifiedMessage = processOpencodeMessage(data, setUnclassifiedMessages);
-            console.log('📊 Classified:', classifiedMessage.type, classifiedMessage.category);
-            setEvents(prev => updateOrAddMessage(prev, classifiedMessage));
-          }
-        } catch (parseError) {
-          // Ignore parse errors
-        }
-      });
-
-      eventSourceRef.current.addEventListener("error", (event) => {
-        console.log('SSE Error event:', event);
-        console.log('EventSource readyState:', eventSourceRef.current.readyState);
-        console.log('EventSource url:', eventSourceRef.current.url);
-        // Don't change connection state for SSE errors - we're already connected via HTTP
-        const errorMsg = event.message || event.error || 'Connection failed';
-        console.log(`Real-time connection error: ${errorMsg}`);
-      });
-
-    } catch (err) {
-      console.log('⚠️ SSE connection setup failed:', err.message);
-      // Don't fail the whole connection for SSE issues
     }
+
+    // Check if EventSource is available
+    if (typeof EventSource === 'undefined') {
+      setError('Real-time messages not supported on this platform');
+      return;
+    }
+
+    // Use the baseUrl to construct SSE URL
+    const sseUrl = baseUrl + '/global/event';
+    console.log('EventSource created for:', sseUrl);
+    eventSourceRef.current = new EventSource(sseUrl, {
+      headers: {
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+    });
+    console.log('EventSource readyState after creation:', eventSourceRef.current.readyState);
+
+    eventSourceRef.current.addEventListener("open", (event) => {
+      console.log("🚀 SSE connection opened successfully!");
+      console.log('EventSource readyState:', eventSourceRef.current.readyState);
+      setIsConnected(true);
+      setError(null); // Clear any previous errors
+    });
+
+    eventSourceRef.current.addEventListener("message", (event) => {
+      const rawMessage = event.data;
+      try {
+        const data = JSON.parse(rawMessage);
+        if (Array.isArray(data)) {
+          console.log(`📦 Processing array of ${data.length} messages`);
+          data.forEach((item, index) => {
+            console.log(`🔄 Processing message ${index + 1}/${data.length}`);
+            const classifiedMessage = processOpencodeMessage(item, setUnclassifiedMessages, setTodos);
+            setEvents(prev => updateOrAddMessage(prev, classifiedMessage));
+          });
+        } else {
+          const classifiedMessage = processOpencodeMessage(data, setUnclassifiedMessages, setTodos);
+          setEvents(prev => updateOrAddMessage(prev, classifiedMessage));
+        }
+      } catch (parseError) {
+        // Ignore parse errors
+      }
+    });
+
+    eventSourceRef.current.addEventListener("error", (event) => {
+      console.log('SSE Error event:', event);
+      console.log('EventSource readyState:', eventSourceRef.current.readyState);
+      console.log('EventSource url:', eventSourceRef.current.url);
+      // Update connection state on error
+      setIsConnected(false);
+      const errorMsg = event.message || event.error || 'Connection failed';
+      console.log(`Real-time connection error: ${errorMsg}`);
+    });
   };
 
   // Test connectivity to the configured server on startup
@@ -259,7 +280,10 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     // Test connectivity to the initial server URL
     const testUrl = inputUrl.replace('/global/event', '');
     console.log('🌐 Initial connectivity test for:', testUrl);
-    fetch(testUrl, { method: 'HEAD' })
+    fetch(testUrl, {
+      method: 'HEAD',
+      headers: getRequestHeaders({}, selectedProject)
+    })
       .then(response => {
         console.log('✅ Initial connectivity test successful');
         setIsServerReachable(true);
@@ -270,9 +294,39 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
       });
   }, []); // Empty dependency array - only run once on mount
 
-  // Sync selectedSession ref with state
+   // Sync selectedSession ref with state
+   useEffect(() => {
+     selectedSessionRef.current = selectedSession;
+   }, [selectedSession]);
+
+   // Sync projectSessions ref with state
+   useEffect(() => {
+     projectSessionsRef.current = projectSessions;
+   }, [projectSessions]);
+
+  // Update model options when selected session changes
   useEffect(() => {
-    selectedSessionRef.current = selectedSession;
+    if (selectedSession && baseUrl) {
+      console.log('🔄 Session changed, updating model options for session:', selectedSession.id);
+      loadModels();
+    }
+  }, [selectedSession, baseUrl]);
+
+  // Track app state for notification logic
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      setAppState(nextAppState);
+      // Reconnect SSE if coming back to foreground and connection is lost
+      if (nextAppState === 'active' && eventSourceRef.current && eventSourceRef.current.readyState !== EventSource.OPEN) {
+        console.log('Reconnecting SSE on foreground');
+        setupSSEConnection();
+      }
+    });
+
+    // Set current session getter for notification filtering
+    notificationService.setCurrentSessionGetter(() => selectedSession);
+
+    return () => subscription?.remove();
   }, [selectedSession]);
 
   // Auto-connect when server becomes reachable
@@ -287,12 +341,34 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     }
   }, [isServerReachable, isConnected, isConnecting]); // Depend on connectivity state
 
+  // SSE heartbeat and auto-restart
+  useEffect(() => {
+    console.warn('WARNING: SSE heartbeat interval set to 5 seconds - this is high frequency for testing only');
+    const heartbeatInterval = setInterval(() => {
+      const timestamp = new Date().toISOString();
+      if (eventSourceRef.current && eventSourceRef.current.readyState !== EventSource.OPEN) {
+        console.log(`${timestamp} SSE heartbeat failed - restarting connection`);
+        setIsConnected(false);
+        setupSSEConnection();
+      } else {
+        console.log(`${timestamp} SSE heartbeat OK`);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(heartbeatInterval);
+  }, []);
+
   const connectToEvents = async () => {
     console.log('🔌 CONNECT BUTTON PRESSED - starting connection');
     let urlToUse = inputUrl.trim();
 
+    // Auto-prepend https:// if no protocol specified
+    if (!urlToUse.startsWith('http://') && !urlToUse.startsWith('https://')) {
+      urlToUse = 'https://' + urlToUse;
+    }
+
     if (!validateUrl(urlToUse)) {
-      setError('Please enter a valid URL (must start with http:// or https://)');
+      setError('Please enter a valid URL');
       return;
     }
 
@@ -308,7 +384,10 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     // Test connectivity before attempting full connection
     if (!isServerReachable) {
       try {
-        const response = await fetch(urlToUse, { method: 'HEAD' });
+        const response = await fetch(urlToUse, {
+          method: 'HEAD',
+          headers: getRequestHeaders({}, selectedProject)
+        });
         if (!response.ok) {
           throw new Error(`Server responded with status ${response.status}`);
         }
@@ -326,19 +405,30 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     // At this point, we know the server is reachable, so set connected state
     setIsConnected(true);
     setIsConnecting(false);
-    setBaseUrl(urlToUse.replace('/global/event', ''));
-    console.log('✅ Connection successful, baseUrl set to:', urlToUse.replace('/global/event', ''));
+    const successfulBaseUrl = urlToUse.replace('/global/event', '');
+    setBaseUrl(successfulBaseUrl);
+    console.log('✅ Connection successful, baseUrl set to:', successfulBaseUrl);
+
+    // Save last successful inputUrl
+    try {
+      await AsyncStorage.setItem('lastSuccessfulUrl', urlToUse.replace('/global/event', ''));
+    } catch (error) {
+      console.error('Failed to save last URL:', error);
+    }
 
     // Fetch projects
     try {
       const baseUrl = urlToUse.replace('/global/event', '');
-      const availableProjects = await fetchProjects(baseUrl);
+      const availableProjects = await fetchProjects(baseUrl, selectedProject);
       setProjects(availableProjects);
     } catch (projectError) {
       console.error('❌ Project fetch failed:', projectError);
       setError(`Failed to fetch projects: ${projectError.message}`);
       return;
     }
+
+    // Load available models
+    await loadModels();
 
 
   };
@@ -348,7 +438,7 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     setSelectedSession(null); // Clear previous session selection
 
     try {
-      const sessions = await fetchSessionsForProject(inputUrl.replace('/global/event', ''), project.id);
+      const sessions = await fetchSessionsForProject(inputUrl.replace('/global/event', ''), project.id, project);
       setProjectSessions(sessions);
     } catch (error) {
       console.error('❌ Failed to fetch sessions:', error);
@@ -368,13 +458,21 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
 
    const createSession = async () => {
      try {
-       const response = await fetch(`${baseUrl}/session`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({})
-       });
-       if (!response.ok) throw new Error('Failed to create session');
-       const newSession = await response.json();
+         const response = await fetch(`${baseUrl}/session`, {
+          method: 'POST',
+          headers: getRequestHeaders({
+            'Content-Type': 'application/json'
+          }, selectedProject),
+          body: JSON.stringify({})
+        });
+        if (!response.ok) throw new Error('Failed to create session');
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
+        }
+
+        const newSession = await response.json();
        // Add to projectSessions
        setProjectSessions(prev => [newSession, ...prev]);
        // Select the new session
@@ -384,7 +482,28 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
        console.error('Create session failed:', error);
        throw error;
      }
-   };
+    };
+
+  // Delete a session with UI updates
+  const deleteSessionWithConfirmation = async (sessionId) => {
+    try {
+      await deleteSession(sessionId, baseUrl, selectedProject);
+
+      // Update UI state - remove from project sessions
+      setProjectSessions(prev => prev.filter(session => session.id !== sessionId));
+
+      // If we deleted the currently selected session, clear selection
+      if (selectedSession && selectedSession.id === sessionId) {
+        setSelectedSession(null);
+        setEvents([]);
+      }
+
+      console.log('🗑️ Session deleted from UI:', sessionId);
+    } catch (error) {
+      console.error('❌ Failed to delete session:', error);
+      throw error;
+    }
+  };
 
   const disconnectFromEvents = () => {
     setIsConnected(false);
@@ -424,22 +543,23 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
       return;
     }
 
-    try {
-      // Display sent message in UI immediately
-      const sentMessageId = generateMessageId();
-      setEvents(prev => [...prev, {
-        id: sentMessageId,
-        type: 'sent',
-        category: 'sent',
-        message: messageText,
-        projectName: 'Me',
-        icon: '👤',
-        timestamp: new Date().toISOString()
-      }]);
+    // Display sent message in UI immediately
+    const sentMessageId = generateMessageId();
+    setEvents(prev => [...prev, {
+      id: sentMessageId,
+      type: 'sent',
+      category: 'sent',
+      message: messageText,
+      projectName: 'Me',
+      icon: '👤',
+      timestamp: new Date().toISOString(),
+      mode: mode
+    }]);
 
+    try {
       // Send message to server
       /** @type {import('./opencode-types.js').SessionMessageResponse} */
-      const response = await sendMessageToSession(messageText, mode);
+      const response = await sendMessageToSession(messageText, mode, selectedProject, selectedModel);
 
       // Auto-dismiss keyboard after successful send
       Keyboard.dismiss();
@@ -481,14 +601,21 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
      projects,
      projectSessions,
      selectedProject,
-     selectedSession,
-     isSessionBusy,
-     connectToEvents,
+      selectedSession,
+      isSessionBusy,
+      todos,
+      providers,
+      selectedModel,
+      modelsLoading,
+      loadModels,
+      onModelSelect: handleModelSelect,
+      connectToEvents,
      disconnectFromEvents,
      selectProject,
      selectSession,
-     createSession,
-     clearError,
-     sendMessage,
-   };
-};
+      createSession,
+      deleteSession: deleteSessionWithConfirmation,
+      clearError,
+      sendMessage,
+    };
+  };

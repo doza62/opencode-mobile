@@ -52,7 +52,6 @@ const MessageFilter = ({
       filtered.push(event);
     });
 
-    console.log('✅ Filtered events result:', filtered.length, 'events');
     return filtered;
   }, [events, selectedSession]);
 

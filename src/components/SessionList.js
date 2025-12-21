@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { getSessionSummaryText, formatSessionDate } from '../utils/projectManager';
 
 /**
@@ -9,15 +9,41 @@ import { getSessionSummaryText, formatSessionDate } from '../utils/projectManage
  * @param {boolean} props.visible - Whether the modal is visible
  * @param {Function} props.onSessionSelect - Function called when a session is selected
  * @param {Function} props.onClose - Function called when modal is closed
+ * @param {Function} props.deleteSession - Function to delete a session
  */
-const SessionList = ({ sessions, visible, onSessionSelect, onClose }) => {
+const SessionList = ({ sessions, visible, onSessionSelect, onClose, deleteSession }) => {
   const handleSessionSelect = (session) => {
     onSessionSelect(session);
     onClose();
   };
 
-  // Sort sessions by updated time (most recent first)
-  const sortedSessions = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
+  const handleDeleteSession = (session) => {
+    Alert.alert(
+      'Delete Session',
+      `Are you sure you want to delete "${session.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSession(session.id);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete session. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Sort sessions by updated time (most recent first), fallback to created time
+  const sortedSessions = [...sessions].sort((a, b) => {
+    const aTime = a.time?.updated || a.time?.created || 0;
+    const bTime = b.time?.updated || b.time?.created || 0;
+    return bTime - aTime;
+  });
 
   return (
     <Modal
@@ -33,12 +59,12 @@ const SessionList = ({ sessions, visible, onSessionSelect, onClose }) => {
 
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
             {sortedSessions.map((session) => (
-              <TouchableOpacity
-                key={session.id}
-                style={styles.sessionItem}
-                onPress={() => handleSessionSelect(session)}
-                activeOpacity={0.7}
-              >
+              <View key={session.id} style={styles.sessionItem}>
+                <TouchableOpacity
+                  style={styles.sessionContent}
+                  onPress={() => handleSessionSelect(session)}
+                  activeOpacity={0.7}
+                >
                 <View style={styles.sessionHeader}>
                   <Text style={styles.sessionTitle} numberOfLines={2}>
                     🎯 {session.title}
@@ -68,7 +94,14 @@ const SessionList = ({ sessions, visible, onSessionSelect, onClose }) => {
                 <View style={styles.versionBadge}>
                   <Text style={styles.versionText}>{session.version}</Text>
                 </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteSession(session)}
+                >
+                  <Text style={styles.deleteIcon}>🗑️</Text>
+                </TouchableOpacity>
+              </View>
             ))}
 
             {sortedSessions.length === 0 && (
@@ -138,6 +171,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  sessionContent: {
+    flex: 1,
+  },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  deleteIcon: {
+    fontSize: 16,
+    color: '#f44336',
   },
   sessionHeader: {
     flexDirection: 'row',

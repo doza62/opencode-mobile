@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Keyboard, KeyboardAvoidingVie
 import { useSSE } from '../hooks/useSSE';
 import StatusBar from '../components/StatusBar';
 import InfoBar from '../components/InfoBar';
+import TodoDrawer from '../components/TodoDrawer';
 import MessageFilter from '../components/MessageFilter';
 import SessionStatusToggle from '../components/SessionStatusToggle';
 import URLInput from '../components/URLInput';
@@ -28,6 +29,13 @@ export default function EventScreen() {
     selectedProject,
     selectedSession,
     isSessionBusy,
+    todos,
+    providers,
+    selectedModel,
+    modelsLoading,
+    onModelSelect,
+    loadModels,
+    deleteSession,
     connectToEvents,
     disconnectFromEvents,
     selectProject,
@@ -60,19 +68,28 @@ export default function EventScreen() {
               selectedSession={selectedSession}
               onSessionSelect={selectSession}
               onCreateSession={createSession}
+              deleteSession={deleteSession}
               baseUrl={inputUrl.replace('/global/event', '')}
+              isSessionBusy={isSessionBusy}
             />
 
+            <TodoDrawer todos={todos} />
+
             {showInfoBar && (
-              <InfoBar
-                isConnected={isConnected}
-                isConnecting={isConnecting}
-                onReconnect={connectToEvents}
-                onDisconnect={disconnectFromEvents}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-                serverUrl={inputUrl}
-              />
+            <InfoBar
+              isConnected={isConnected}
+              isConnecting={isConnecting}
+              onReconnect={connectToEvents}
+              onDisconnect={disconnectFromEvents}
+              selectedProject={selectedProject}
+              selectedSession={selectedSession}
+              serverUrl={inputUrl}
+              providers={providers}
+              selectedModel={selectedModel}
+              onModelSelect={onModelSelect}
+              modelsLoading={modelsLoading}
+              onFetchModels={loadModels}
+            />
             )}
 
             <MessageFilter
@@ -95,6 +112,7 @@ export default function EventScreen() {
               visible={isConnected && selectedProject && projectSessions.length > 0 && !selectedSession}
               onSessionSelect={selectSession}
               onClose={() => {}}
+              deleteSession={deleteSession}
             />
 
             <URLInput
@@ -114,10 +132,6 @@ export default function EventScreen() {
           onClose={() => setShowLogs(false)}
         />
       </SafeAreaView>
-
-      <View style={[styles.overlayContainer, { bottom: 70 }]}>
-        <SessionStatusToggle isBusy={isSessionBusy} />
-      </View>
     </View>
   );
 }

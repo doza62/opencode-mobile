@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Dimensions, Alert } from 'react-native';
+import SessionStatusToggle from './SessionStatusToggle';
 
 /**
  * StatusBar component showing app title and connection status
@@ -8,8 +9,25 @@ import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, 
  * @param {boolean} props.isConnecting - Whether SSE is connecting
  * @param {boolean|null} props.isServerReachable - Whether server is reachable (null = not tested)
  */
-const StatusBar = ({ isConnected, isConnecting, isServerReachable, showInfoBar, onToggleInfoBar, projectSessions, selectedSession, onSessionSelect, onCreateSession }) => {
+const StatusBar = ({
+  isConnected,
+  isConnecting,
+  isServerReachable,
+  showInfoBar,
+  onToggleInfoBar,
+  projectSessions,
+  selectedSession,
+  onSessionSelect,
+  onCreateSession,
+  deleteSession,
+  isSessionBusy
+}) => {
   const [dropdownVisible, setDropdownVisible] = useState(false);
+
+  const truncateTitle = (title, maxLength = 20) => {
+    if (!title) return 'SSE Chat';
+    return title.length > maxLength ? title.slice(0, maxLength) + '...' : title;
+  };
   const [creating, setCreating] = useState(false);
 
   const toggleDropdown = () => {
@@ -34,6 +52,28 @@ const StatusBar = ({ isConnected, isConnecting, isServerReachable, showInfoBar, 
     setDropdownVisible(false);
   };
 
+  const handleDeleteSession = (session) => {
+    Alert.alert(
+      'Delete Session',
+      `Are you sure you want to delete "${session.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSession(session.id);
+              setDropdownVisible(false);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete session. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderSessionItem = ({ item }) => {
     if (item.type === 'create') {
       return (
@@ -53,20 +93,28 @@ const StatusBar = ({ isConnected, isConnecting, isServerReachable, showInfoBar, 
 
     const isActive = selectedSession && selectedSession.id === item.id;
     return (
-      <TouchableOpacity
-        style={[styles.sessionItem, isActive && styles.activeSessionItem]}
-        onPress={() => handleSessionSelect(item)}
-      >
-        <View style={styles.sessionInfo}>
-          <Text style={[styles.sessionTitle, isActive && styles.activeSessionTitle]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.sessionMeta}>
-            ID: {item.id.slice(0, 8)}... • {new Date(item.time.updated).toLocaleDateString()}
-          </Text>
-        </View>
-        {isActive && <Text style={styles.activeIndicator}>✓</Text>}
-      </TouchableOpacity>
+      <View style={[styles.sessionItem, isActive && styles.activeSessionItem]}>
+        <TouchableOpacity
+          style={styles.sessionContent}
+          onPress={() => handleSessionSelect(item)}
+        >
+          <View style={styles.sessionInfo}>
+            <Text style={[styles.sessionTitle, isActive && styles.activeSessionTitle]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.sessionMeta}>
+              ID: {item.id.slice(0, 8)}... • {new Date(item.time.updated).toLocaleDateString()}
+            </Text>
+          </View>
+          {isActive && <Text style={styles.activeIndicator}>✓</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteSession(item)}
+        >
+          <Text style={styles.deleteIcon}>🗑️</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -74,36 +122,36 @@ const StatusBar = ({ isConnected, isConnecting, isServerReachable, showInfoBar, 
     <View style={styles.statusBar}>
       <View style={styles.leftContainer}>
         <TouchableOpacity style={styles.titleContainer} onPress={toggleDropdown}>
-          <Text style={styles.appTitle}>SSE Chat</Text>
+          <Text style={styles.appTitle} numberOfLines={1}>{truncateTitle(selectedSession?.title)}</Text>
           <Text style={styles.dropdownArrow}>{dropdownVisible ? '▼' : '▶'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.infoToggle}
-          onPress={onToggleInfoBar}
-        >
-          <Text style={styles.infoToggleText}>ⓘ</Text>
-        </TouchableOpacity>
+
       </View>
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusDot, {
-          backgroundColor: isConnected ? '#4CAF50' :
-                         isConnecting ? '#2196F3' :
-                         isServerReachable === true ? '#FF9800' :  // Orange for server reachable but not connected
-                         isServerReachable === false ? '#F44336' : '#9E9E9E' // Gray for not tested
-        }]} />
-        <Text style={[styles.statusText, {
-          color: isConnected ? '#4CAF50' :
-                isConnecting ? '#2196F3' :
-                isServerReachable === true ? '#FF9800' :
-                isServerReachable === false ? '#F44336' : '#9E9E9E'
-        }]}>
-          {isConnected ? 'Connected' :
-           isConnecting ? 'Connecting...' :
-           isServerReachable === true ? 'Server Ready' :
-           isServerReachable === false ? 'Server Unreachable' :
-           'Checking...'}
-        </Text>
-          {isConnecting && <ActivityIndicator size="small" color="#333333" style={styles.loadingIndicator} />}
+
+      <View style={styles.rightContainer}>
+        <TouchableOpacity style={styles.statusContainer} onPress={onToggleInfoBar}>
+          <View style={[styles.statusDot, {
+            backgroundColor: isConnected ? '#4CAF50' :
+                           isConnecting ? '#2196F3' :
+                           isServerReachable === true ? '#FF9800' :  // Orange for server reachable but not connected
+                           isServerReachable === false ? '#F44336' : '#9E9E9E' // Gray for not tested
+          }]} />
+          <Text style={[styles.statusText, {
+            color: isConnected ? '#4CAF50' :
+                  isConnecting ? '#2196F3' :
+                  isServerReachable === true ? '#FF9800' :
+                  isServerReachable === false ? '#F44336' : '#9E9E9E'
+          }]}>
+            {isConnected ? 'Connected' :
+             isConnecting ? 'Connecting...' :
+             isServerReachable === true ? 'Server Ready' :
+             isServerReachable === false ? 'Server Unreachable' :
+             'Checking...'}
+          </Text>
+            {isConnecting && <ActivityIndicator size="small" color="#333333" style={styles.loadingIndicator} />}
+        </TouchableOpacity>
+
+        <SessionStatusToggle isBusy={isSessionBusy} />
       </View>
 
       <Modal
@@ -145,6 +193,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e0e0e0',
   },
   leftContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -215,6 +268,19 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  sessionContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  deleteIcon: {
+    fontSize: 16,
+    color: '#f44336',
   },
   activeSessionItem: {
     backgroundColor: '#e3f2fd',

@@ -4,25 +4,33 @@
  */
 
 import './opencode-types.js';
+import { getRequestHeaders } from './requestUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Fetch all available projects from the server
  * @param {string} baseUrl - Base URL of the opencode server
+ * @param {Object} selectedProject - Currently selected project (for headers)
  * @returns {Promise<Array<import('./opencode-types.js').Project>>} - Array of projects
  */
-export const fetchProjects = async (baseUrl) => {
+export const fetchProjects = async (baseUrl, selectedProject = null) => {
   try {
 
 
     const response = await fetch(`${baseUrl}/project`, {
       method: 'GET',
-      headers: {
+      headers: getRequestHeaders({
         'Accept': 'application/json'
-      }
+      }, selectedProject)
     });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
     /** @type {Array<import('./opencode-types.js').Project>} */
@@ -36,24 +44,84 @@ export const fetchProjects = async (baseUrl) => {
 };
 
 /**
+ * Fetch available models and providers from the server
+ * @param {string} baseUrl - Base URL of the opencode server
+ * @param {Object} selectedProject - Currently selected project (for headers)
+ * @returns {Promise<{providers: Array, defaults: Object}>} - Available providers and default models
+ */
+export const fetchModels = async (baseUrl, selectedProject = null) => {
+  try {
+    const response = await fetch(`${baseUrl}/global/providers`, {
+      method: 'GET',
+      headers: getRequestHeaders({
+        'Accept': 'application/json'
+      }, selectedProject)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // If not JSON, return empty to avoid errors
+      console.warn('⚠️ Model fetch returned non-JSON, using empty providers');
+      return {
+        providers: [],
+        defaults: {}
+      };
+    }
+
+    /** @type {{providers: Array, default: Object} | Array} */
+    const data = await response.json();
+
+    // Handle both object {providers: [...], default: {...}} and array [...] formats
+    if (Array.isArray(data)) {
+      return {
+        providers: data,
+        defaults: {}
+      };
+    } else {
+      return {
+        providers: data.providers || [],
+        defaults: data.default || {}
+      };
+    }
+  } catch (error) {
+    console.error('❌ Model fetch failed:', error);
+    // Return empty providers instead of throwing to prevent app crashes
+    return {
+      providers: [],
+      defaults: {}
+    };
+  }
+};
+
+/**
  * Fetch all sessions for a specific project
  * @param {string} baseUrl - Base URL of the opencode server
  * @param {string} projectId - Project ID to filter sessions
+ * @param {Object} selectedProject - Currently selected project (for headers)
  * @returns {Promise<Array<import('./opencode-types.js').Session>>} - Array of sessions for the project
  */
-export const fetchSessionsForProject = async (baseUrl, projectId) => {
+export const fetchSessionsForProject = async (baseUrl, projectId, selectedProject = null) => {
   try {
 
 
     const response = await fetch(`${baseUrl}/session`, {
       method: 'GET',
-      headers: {
+      headers: getRequestHeaders({
         'Accept': 'application/json'
-      }
+      }, selectedProject)
     });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
     /** @type {Array<import('./opencode-types.js').Session>} */
@@ -119,6 +187,40 @@ export const formatSessionDate = (timestamp) => {
     return `${diffDays} days ago`;
   } else {
     return date.toLocaleDateString();
+  }
+};
+
+/**
+ * Save the last selected model to AsyncStorage
+ * @param {string} providerId - Provider ID
+ * @param {string} modelId - Model ID
+ */
+export const saveLastSelectedModel = async (providerId, modelId) => {
+  try {
+    const modelData = { providerId, modelId, timestamp: Date.now() };
+    await AsyncStorage.setItem('lastSelectedModel', JSON.stringify(modelData));
+    console.log('💾 Saved last selected model:', modelData);
+  } catch (error) {
+    console.error('❌ Failed to save last selected model:', error);
+  }
+};
+
+/**
+ * Load the last selected model from AsyncStorage
+ * @returns {Promise<{providerId: string, modelId: string}|null>} - Last selected model or null
+ */
+export const loadLastSelectedModel = async () => {
+  try {
+    const modelData = await AsyncStorage.getItem('lastSelectedModel');
+    if (modelData) {
+      const parsed = JSON.parse(modelData);
+      console.log('📚 Loaded last selected model:', parsed);
+      return parsed;
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ Failed to load last selected model:', error);
+    return null;
   }
 };
 

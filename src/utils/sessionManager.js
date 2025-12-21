@@ -4,6 +4,7 @@
  */
 
 import './opencode-types.js';
+import { getRequestHeaders } from './requestUtils';
 
 // In-memory session storage (can be expanded to persistent storage later)
 /** @type {import('./opencode-types.js').Session|null} */
@@ -14,22 +15,28 @@ let baseUrl = null;
 /**
  * Create a new chat session
  * @param {string} serverBaseUrl - Base URL of the opencode server
+ * @param {Object} selectedProject - Currently selected project
  * @returns {Promise<import('./opencode-types.js').Session>} - Session object
  */
-export const createSession = async (serverBaseUrl) => {
+export const createSession = async (serverBaseUrl, selectedProject = null) => {
   try {
 
 
     const response = await fetch(`${serverBaseUrl}/session`, {
       method: 'POST',
-      headers: {
+      headers: getRequestHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      }
+      }, selectedProject)
     });
 
     if (!response.ok) {
       throw new Error(`Session creation failed: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
     /** @type {import('./opencode-types.js').Session} */
@@ -106,9 +113,11 @@ export const getSessionBaseUrl = () => {
 /**
  * Send a message to the current session
  * @param {string} messageText - The message text to send
+ * @param {string} mode - Message mode ('build' or 'plan')
+ * @param {Object} selectedProject - Currently selected project
  * @returns {Promise<import('./opencode-types.js').SessionMessageResponse>} - Server response
  */
-export const sendMessageToSession = async (messageText, mode = 'build') => {
+export const sendMessageToSession = async (messageText, mode = 'build', selectedProject = null, selectedModel = null) => {
   if (!currentSession || !baseUrl) {
     throw new Error('No active session. Please connect first.');
   }
@@ -121,20 +130,33 @@ export const sendMessageToSession = async (messageText, mode = 'build') => {
     parts: [{ type: 'text', text: messageText }]
   };
 
+  // Add model information if selected
+  if (selectedModel) {
+    messageBody.model = {
+      providerID: selectedModel.providerId,
+      modelID: selectedModel.modelId
+    };
+  }
+
 
 
   try {
     const response = await fetch(messageUrl, {
       method: 'POST',
-      headers: {
+      headers: getRequestHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      },
+      }, selectedProject),
       body: JSON.stringify(messageBody)
     });
 
     if (!response.ok) {
       throw new Error(`Message send failed: ${response.status} ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
     /** @type {import('./opencode-types.js').SessionMessageResponse} */
@@ -143,6 +165,39 @@ export const sendMessageToSession = async (messageText, mode = 'build') => {
     return data;
   } catch (error) {
     console.error('❌ Message send failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a session
+ * @param {string} sessionId - ID of the session to delete
+ * @param {string} serverBaseUrl - Base URL of the server
+ * @param {Object} selectedProject - Currently selected project (for headers)
+ * @returns {Promise<boolean>} - Success status
+ */
+export const deleteSession = async (sessionId, serverBaseUrl, selectedProject = null) => {
+  try {
+    const response = await fetch(`${serverBaseUrl}/session/${sessionId}`, {
+      method: 'DELETE',
+      headers: getRequestHeaders({
+        'Accept': 'application/json'
+      }, selectedProject)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Session deletion failed: ${response.status} ${response.statusText}`);
+    }
+
+    // If we deleted the current session, clear it
+    if (currentSession && currentSession.id === sessionId) {
+      currentSession = null;
+    }
+
+    console.log('✅ Session deleted successfully:', sessionId);
+    return true;
+  } catch (error) {
+    console.error('❌ Session deletion failed:', error);
     throw error;
   }
 };

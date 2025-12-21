@@ -19,12 +19,20 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#007bff",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "New messages"
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.doza62.opencodemobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"

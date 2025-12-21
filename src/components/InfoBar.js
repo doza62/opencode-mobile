@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { getProjectDisplayName } from '../utils/projectManager';
+import ModelSelector from './ModelSelector';
 
 /**
- * InfoBar component displaying server URL, project, and session info
+ * InfoBar component displaying server URL, project, session info, and model selector
  * @param {Object} props - Component props
  * @param {boolean} props.isConnected - Whether SSE is connected
  * @param {boolean} props.isConnecting - Whether SSE is connecting
@@ -12,8 +13,13 @@ import { getProjectDisplayName } from '../utils/projectManager';
  * @param {import('../utils/opencode-types.js').Project|null} props.selectedProject - Currently selected project
  * @param {import('../utils/opencode-types.js').Session|null} props.selectedSession - Currently selected session
  * @param {string} props.serverUrl - Connected server URL
+ * @param {Array} props.providers - Available model providers
+ * @param {Object} props.selectedModel - Currently selected model
+ * @param {Function} props.onModelSelect - Callback for model selection
+ * @param {boolean} props.modelsLoading - Whether models are loading
+ * @param {Function} props.onFetchModels - Callback to fetch models
  */
-const InfoBar = ({ isConnected, isConnecting, onReconnect, onDisconnect, selectedProject, selectedSession, serverUrl }) => {
+const InfoBar = ({ isConnected, isConnecting, onReconnect, onDisconnect, selectedProject, selectedSession, serverUrl, providers, selectedModel, onModelSelect, modelsLoading, onFetchModels }) => {
   if (!isConnected) {
     return null; // Only show when connected
   }
@@ -40,6 +46,15 @@ const InfoBar = ({ isConnected, isConnecting, onReconnect, onDisconnect, selecte
               <Text style={styles.infoValue}>{selectedSession.title}</Text>
             </View>
           )}
+          <View style={styles.modelSelectorContainer}>
+            <ModelSelector
+              providers={providers}
+              selectedModel={selectedModel}
+              onModelSelect={onModelSelect}
+              loading={modelsLoading}
+              onFetchModels={onFetchModels}
+            />
+          </View>
         </View>
 
         <View style={styles.controlButtons}>
@@ -80,6 +95,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     flex: 1,
     gap: 8,
+  },
+  modelSelectorContainer: {
+    marginTop: 8,
   },
   infoItem: {
     flexDirection: 'row',

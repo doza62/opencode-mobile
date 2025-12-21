@@ -18,55 +18,55 @@ const EventList = ({ events, groupedUnclassifiedMessages, error, onClearError })
 
   // Markdown styles matching app theme
   const markdownStyles = {
-    body: {
-      color: '#333333',
-      fontSize: 14,
-      lineHeight: 20,
-    },
+     body: {
+       color: '#333333',
+       fontSize: 16,
+       lineHeight: 24,
+     },
     paragraph: {
       marginTop: 0,
       marginBottom: 4,
     },
-    heading1: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#333333',
-      marginBottom: 8,
-    },
-    heading2: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: '#333333',
-      marginBottom: 6,
-    },
-    heading3: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: '#333333',
-      marginBottom: 4,
-    },
+     heading1: {
+       fontSize: 28,
+       fontWeight: 'bold',
+       color: '#333333',
+       marginBottom: 10,
+     },
+     heading2: {
+       fontSize: 24,
+       fontWeight: 'bold',
+       color: '#333333',
+       marginBottom: 8,
+     },
+     heading3: {
+       fontSize: 20,
+       fontWeight: 'bold',
+       color: '#333333',
+       marginBottom: 6,
+     },
     strong: {
       fontWeight: 'bold',
     },
     em: {
       fontStyle: 'italic',
     },
-    code_inline: {
-      backgroundColor: '#f5f5f5',
-      paddingHorizontal: 4,
-      paddingVertical: 2,
-      borderRadius: 3,
-      fontFamily: 'monospace',
-      fontSize: 13,
-    },
-    code_block: {
-      backgroundColor: '#f5f5f5',
-      padding: 8,
-      borderRadius: 4,
-      fontFamily: 'monospace',
-      fontSize: 13,
-      marginVertical: 4,
-    },
+     code_inline: {
+       backgroundColor: '#f5f5f5',
+       paddingHorizontal: 6,
+       paddingVertical: 3,
+       borderRadius: 3,
+       fontFamily: 'monospace',
+       fontSize: 14,
+     },
+     code_block: {
+       backgroundColor: '#f5f5f5',
+       padding: 10,
+       borderRadius: 4,
+       fontFamily: 'monospace',
+       fontSize: 14,
+       marginVertical: 6,
+     },
     link: {
       color: '#007bff',
       textDecorationLine: 'underline',
@@ -102,7 +102,6 @@ const EventList = ({ events, groupedUnclassifiedMessages, error, onClearError })
   }, [events]);
 
   const renderEventItem = ({ item }) => {
-    console.log('🎨 RENDERING EVENT:', item.type, item.category, item.message?.substring(0, 50) + '...');
     // Don't render connection messages in the main UI - only show in logs
     if (item.type === 'connection') {
       return null;
@@ -136,13 +135,13 @@ const EventList = ({ events, groupedUnclassifiedMessages, error, onClearError })
         containerStyle = styles.leftAlignedContainer;
         break;
       case 'message_finalized':
-        itemStyle = styles.finalizedItem;
-        typeStyle = styles.finalizedType;
+        itemStyle = item.mode === 'plan' ? styles.planFinalizedItem : styles.finalizedItem;
+        typeStyle = item.mode === 'plan' ? styles.planFinalizedType : styles.finalizedType;
         messageStyle = styles.finalizedMessage;
         containerStyle = styles.leftAlignedContainer;
         break;
       default:
-        itemStyle = styles.messageItem;
+        itemStyle = item.mode === 'plan' ? styles.planMessageItem : styles.messageItem;
         typeStyle = styles.messageType;
         messageStyle = styles.messageMessage;
         containerStyle = styles.leftAlignedContainer;
@@ -258,20 +257,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  eventItem: {
-    padding: 8,
-    marginBottom: 8,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderRightWidth: 0,
-  },
+   listContent: {
+     paddingHorizontal: 20,
+     paddingBottom: 20,
+   },
+   eventItem: {
+     padding: 12,
+     marginBottom: 12,
+     borderRadius: 0,
+     borderLeftWidth: 4,
+     borderRightWidth: 0,
+     shadowColor: '#000',
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 2,
+   },
   messageItem: {
     backgroundColor: '#ffffff',
     borderLeftColor: '#007bff',
+    borderLeftWidth: 4,
+  },
+  planMessageItem: {
+    backgroundColor: '#ffffff',
+    borderLeftColor: '#6200ee',
     borderLeftWidth: 4,
   },
   connectionItem: {
@@ -315,11 +324,19 @@ const styles = StyleSheet.create({
   // Classified message styles
   finalizedItem: {
     backgroundColor: '#f8f9fa',
-    borderLeftColor: '#28a745',
+    borderLeftColor: '#007bff',
+    borderLeftWidth: 4,
+  },
+  planFinalizedItem: {
+    backgroundColor: '#f8f9fa',
+    borderLeftColor: '#6200ee',
     borderLeftWidth: 4,
   },
   finalizedType: {
-    color: '#4CAF50',
+    color: '#007bff',
+  },
+  planFinalizedType: {
+    color: '#6200ee',
   },
   finalizedMessage: {
     color: '#2e7d32',
@@ -374,12 +391,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   // Sent message styles
-  sentItem: {
-    backgroundColor: '#f8f9fa',
-    borderRightColor: '#007bff',
-    borderRightWidth: 4,
-    borderLeftWidth: 0,
-  },
+   sentItem: {
+     backgroundColor: '#f8f9fa',
+     borderRightColor: '#28a745',
+     borderRightWidth: 4,
+     borderLeftWidth: 0,
+   },
   sentType: {
     color: '#2196F3',
   },

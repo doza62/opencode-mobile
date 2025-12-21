@@ -32,7 +32,8 @@ export const classifyMessage = (item) => {
         icon: '🔄',
         sessionId: sessionId,
         payloadType: payloadType,
-        sessionStatus: statusType
+        sessionStatus: statusType,
+        mode: item.info?.mode || 'build'
       };
     }
   }
@@ -49,17 +50,21 @@ export const classifyMessage = (item) => {
             .join('\n')
         : 'No content available';
 
-      console.log('📚 LOADED MESSAGE - parts:', parts, 'textContent:', textContent.substring(0, 50) + '...');
+      // Classify based on role
+      const role = item.payload?.properties?.info?.role;
+      const messageType = role === 'user' ? 'sent' : 'message_finalized';
+
       return {
-        type: 'message_loaded',
+        type: messageType,
         category: 'message',
         projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
         displayMessage: textContent,
         rawData: item,
-        icon: '📚',
+        icon: role === 'user' ? '👤' : '✅',
         sessionId: sessionId,
         payloadType: payloadType,
-        messageId: item.payload?.properties?.info?.id || null
+        messageId: item.payload?.properties?.info?.id || null,
+        mode: item.info?.mode || 'build'
       };
     } catch (error) {
       console.error('❌ Error processing loaded message:', error);
@@ -71,7 +76,8 @@ export const classifyMessage = (item) => {
         rawData: item,
         icon: '❌',
         sessionId: sessionId,
-        payloadType: payloadType
+        payloadType: payloadType,
+        mode: item.info?.mode || 'build'
       };
     }
   }
@@ -89,7 +95,25 @@ export const classifyMessage = (item) => {
       icon: '✅',
       sessionId: sessionId,
       payloadType: payloadType,
-      messageId: item.payload?.properties?.info?.id || null
+      messageId: item.payload?.properties?.info?.id || null,
+      mode: item.info?.mode || 'build'
+    };
+  }
+
+  // Handle todo updated messages
+  if (payloadType === 'todo.updated') {
+    const todos = item.payload?.properties?.todos || [];
+    return {
+      type: 'todo_updated',
+      category: 'internal', // Don't show in UI
+      projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
+      displayMessage: `Todo list updated: ${todos.length} tasks`,
+      rawData: item,
+      icon: '📋',
+      sessionId: sessionId,
+      payloadType: payloadType,
+      todos: todos,
+      mode: item.info?.mode || 'build'
     };
   }
 
@@ -103,7 +127,8 @@ export const classifyMessage = (item) => {
     rawData: item,
     icon: '⚠️',
     sessionId: sessionId,
-    payloadType: payloadType
+    payloadType: payloadType,
+    mode: item.info?.mode || 'build'
   };
 };
 
