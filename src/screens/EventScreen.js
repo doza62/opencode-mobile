@@ -2,6 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Keyboard, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import StatusBar from '../components/StatusBar';
+import ConnectionStatusBar from '../components/ConnectionStatusBar';
+import SessionMessageFilter from '../components/SessionMessageFilter';
+import ProjectList from '../components/ProjectList';
+import SessionList from '../components/SessionList';
+import ConnectionInput from '../components/ConnectionInput';
+import AppLogViewer from '../components/AppLogViewer';
+import UnclassifiedMessagesScreen from '../components/UnclassifiedMessagesScreen';
+import SessionThinkingIndicator from '../components/SessionThinkingIndicator';
+
 export default function EventScreen(props) {
   const [showLogs, setShowLogs] = useState(false);
   const [showInfoBar, setShowInfoBar] = useState(false);
@@ -77,7 +87,7 @@ export default function EventScreen(props) {
           {/* <TodoDrawer todos={todos} expanded={todoDrawerExpanded} setExpanded={setTodoDrawerExpanded} /> */}
 
           {showInfoBar && (
-            <InfoBar
+            <ConnectionStatusBar
               isConnected={isConnected}
               isConnecting={isConnecting}
               onReconnect={connectToEvents}
@@ -96,7 +106,7 @@ export default function EventScreen(props) {
             />
           )}
 
-          <MessageFilter
+          <SessionMessageFilter
             events={events}
             selectedSession={selectedSession}
             groupedUnclassifiedMessages={groupedUnclassifiedMessages}
@@ -119,7 +129,7 @@ export default function EventScreen(props) {
             deleteSession={deleteSession}
           />
 
-          <URLInput
+          <ConnectionInput
             inputUrl={inputUrl}
             onUrlChange={setInputUrl}
             onConnect={connectToEvents}
@@ -131,18 +141,18 @@ export default function EventScreen(props) {
         </View>
       </KeyboardAvoidingView>
 
-      <LogViewer
+      <AppLogViewer
         visible={showLogs}
         onClose={() => setShowLogs(false)}
       />
 
-      <DebugScreen
+      <UnclassifiedMessagesScreen
         unclassifiedMessages={groupedUnclassifiedMessages}
         visible={debugVisible}
         onClose={() => setDebugVisible(false)}
       />
 
-      <SessionIndicator isThinking={isSessionBusy} />
+      <SessionThinkingIndicator isThinking={isSessionBusy} />
     </SafeAreaView>
   );
 }

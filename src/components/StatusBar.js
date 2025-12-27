@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Dimensions, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
-import SessionStatusToggle from './SessionStatusToggle';
+import SessionBusyIndicator from './SessionBusyIndicator';
 import BreadcrumbSlider from './BreadcrumbSlider';
 
 /**
@@ -226,7 +226,7 @@ const StatusBar = ({
             </Svg>
           </TouchableOpacity>
 
-          <SessionStatusToggle isBusy={isSessionBusy} />
+          <SessionBusyIndicator isBusy={isSessionBusy} />
         </View>
       </View>
 

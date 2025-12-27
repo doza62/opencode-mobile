@@ -1,11 +1,11 @@
 // Components
 export { default as StatusBar } from './StatusBar';
-export { default as InfoBar } from './InfoBar';
+export { default as ConnectionStatusBar } from './ConnectionStatusBar';
 export { default as EventList } from './EventList';
-export { default as URLInput } from './URLInput';
-export { default as SendIcon } from './SendIcon';
-export { default as StatusIcon } from './StatusIcon';
-export { default as CustomDrawerContent } from './CustomDrawerContent';
+export { default as ConnectionInput } from './ConnectionInput';
+export { default as PaperPlaneIcon } from './PaperPlaneIcon';
+export { default as TodoStatusIcon } from './TodoStatusIcon';
+export { default as SessionDrawer } from './SessionDrawer';
 export { default as BreadcrumbSlider } from './BreadcrumbSlider';
 
 // Hooks

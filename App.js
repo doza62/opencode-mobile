@@ -6,7 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 
 import EventScreen from './src/screens/EventScreen';
-import CustomDrawerContent from './src/components/CustomDrawerContent';
+import SessionDrawer from './src/components/SessionDrawer';
 import { useSSE } from './src/hooks/useSSE';
 
 const Drawer = createDrawerNavigator();
@@ -23,7 +23,7 @@ export default function App() {
       <NavigationContainer>
         <Drawer.Navigator
           drawerContent={(props) => (
-            <CustomDrawerContent
+            <SessionDrawer
               {...props}
               sessions={sseData.projectSessions}
               selectedSession={sseData.selectedSession}

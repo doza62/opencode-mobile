@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, FlatList } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import StatusIcon from './StatusIcon';
+import TodoStatusIcon from './TodoStatusIcon';
 
 /**
  * TodoDrawer component - A collapsible top drawer showing todo tasks
@@ -39,7 +39,7 @@ const TodoDrawer = ({ todos = [], expanded, setExpanded }) => {
         onPress={isFirstItem ? toggleExpanded : undefined}
       >
         <View style={styles.todoContent}>
-          <StatusIcon status={item.status} />
+          <TodoStatusIcon status={item.status} />
           <Text style={[styles.todoText, item.status === 'completed' && styles.completedText]}>
             {item.content}
           </Text>
