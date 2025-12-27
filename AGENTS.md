@@ -1,52 +1,55 @@
 # AGENTS.md - Opencode Mobile
 
 ## Commands
-- **Check syntax**: Run `npm run web -- --clear` or `expo start --web --clear` to validate without starting server
+- **Syntax check**: `npm run web -- --clear` (validates without starting server)
 - **No lint/test commands** - add ESLint/Prettier if needed
-- **No test runner** - add Jest if testsare added
+- **No test runner** - add Jest if tests are added
 
 ## Development Workflow
-- **Syntax Validation**: Always check for syntax errors after edits using web build command
-- **Server Hosting**: Do not start dev server - user hosts separately in different terminal
+- **Syntax Validation**: Always run `npm run web -- --clear` after edits
+- **Server Hosting**: User hosts dev server separately in different terminal
 - **File Changes**: Validate changes don't break app before committing
 
 ## Code Style Guidelines
 
+### Architecture
+- **Domain-driven structure**: `features/` for business logic, `services/` for external APIs
+- **Feature modules**: Each domain in `features/[domain]/` with `hooks/`, `services/`, `utils/`, `types/`
+- **Shared utilities**: Cross-cutting concerns in `shared/` (types, constants, helpers)
+
 ### Imports
-- Use ES6 imports: `import { Component } from 'react'`
-- Relative paths: `import Component from './Component'`
-- Group: React/React Native first, then local components/hooks/utils
+- **Centralized exports**: Import from `features/` index for feature modules
+- **Relative paths**: Use relative imports within feature modules
+- **Group imports**: React/React Native first, then local modules
 
 ### Formatting
-- 2 spaces indentation
-- Semicolons required
-- Single quotes for strings
-- Trailing commas in objects/arrays
+- **2 spaces indentation**, semicolons required, single quotes, trailing commas
+- **Line length**: Keep under 100 characters where possible
 
 ### Naming
-- **Variables/functions**: camelCase (`handleClick`, `isConnected`)
 - **Components**: PascalCase (`MessageList`, `StatusBar`)
-- **Files**: PascalCase for components, camelCase for utils/hooks
-- **Constants**: UPPER_SNAKE_CASE if needed
+- **Hooks**: camelCase with `use` prefix (`useSSEConnection`)
+- **Files**: PascalCase for components, camelCase for hooks/utils
+- **Constants**: UPPER_SNAKE_CASE in constants files
 
 ### Types
-- Use JSDoc comments: `/** @param {string} url */`
-- Reference types from `opencode-types.js`
-- Avoid TypeScript - stick to JS with JSDoc
+- **JSDoc comments**: `/** @param {string} url */` for function parameters
+- **Type references**: Import from `shared/types/opencode.types.js`
+- **No TypeScript**: Stick to JavaScript with JSDoc
 
 ### Error Handling
-- `try/catch` for async operations
-- `console.error()` for errors, `console.log()` for debug
-- Graceful fallbacks, don't crash on errors
+- **Try/catch** for async operations with graceful fallbacks
+- **Console logging**: `console.error()` for errors, `console.log()` for debug
+- **Never crash**: Always provide fallbacks for error states
 
 ### React Patterns
-- Functional components with hooks
-- `useState` for state, `useEffect` for side effects
-- Custom hooks in `/hooks` directory
-- Components in `/components`, screens in `/screens`
+- **Functional components** with hooks, no class components
+- **Custom hooks** in feature `hooks/` directories
+- **State management**: `useState` for local state, feature hooks for shared state
+- **Effects**: `useEffect` for side effects with proper cleanup
 
 ### Best Practices
-- No comments unless complex logic
-- Keep functions small and focused
-- Use meaningful variable names
-- Follow existing patterns in codebase
+- **Single responsibility**: Keep functions small and focused
+- **Meaningful names**: Use descriptive variable/function names
+- **No comments**: Unless explaining complex business logic
+- **Consistent patterns**: Follow existing codebase patterns

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Dimensions, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
-import SessionBusyIndicator from './SessionBusyIndicator';
-import BreadcrumbSlider from './BreadcrumbSlider';
+import SessionBusyIndicator from '../common/SessionBusyIndicator';
+import BreadcrumbSlider from '../BreadcrumbSlider';
 
 /**
  * StatusBar component showing app title and connection status
@@ -11,8 +11,8 @@ import BreadcrumbSlider from './BreadcrumbSlider';
  * @param {boolean} props.isConnected - Whether SSE is connected
  * @param {boolean} props.isConnecting - Whether SSE is connecting
  * @param {boolean|null} props.isServerReachable - Whether server is reachable (null = not tested)
- * @param {import('../utils/opencode-types.js').Project|null} props.selectedProject - Currently selected project
- * @param {import('../utils/opencode-types.js').Session|null} props.selectedSession - Currently selected session
+ * @param {import('../shared/types/opencode.types.js').Project|null} props.selectedProject - Currently selected project
+ * @param {import('../shared/types/opencode.types.js').Session|null} props.selectedSession - Currently selected session
  * @param {Function} props.onProjectPress - Function called when project breadcrumb is pressed
  * @param {Function} props.onSessionPress - Function called when session breadcrumb is pressed
  */

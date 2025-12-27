@@ -2,10 +2,10 @@
   "expo": {
     "name": "opencode-mobile",
     "slug": "opencode-mobile",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "system",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -18,15 +18,6 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
-    },
-
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true,
-      "package": "com.doza62.opencodemobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,7 +33,7 @@
     "updates": {
       "url": "https://u.expo.dev/2acd63e2-d8ab-4f1d-8270-f4fd80a3667b"
     },
-    "platforms": ["ios", "android"],
+    "platforms": ["ios"],
     "plugins": [
       "expo-asset"
     ]

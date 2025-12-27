@@ -3,15 +3,15 @@
  * Handles fetching projects, filtering sessions, and project/session selection
  */
 
-import './opencode-types.js';
-import { getRequestHeaders } from './requestUtils';
+import '@/shared/types/opencode.types.js';
+import { getRequestHeaders } from '@/services/api/requestUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Fetch all available projects from the server
  * @param {string} baseUrl - Base URL of the opencode server
  * @param {Object} selectedProject - Currently selected project (for headers)
- * @returns {Promise<Array<import('./opencode-types.js').Project>>} - Array of projects
+ * @returns {Promise<Array<import('@/shared/types/opencode.types.js').Project>>} - Array of projects
  */
 export const fetchProjects = async (baseUrl, selectedProject = null) => {
   try {
@@ -33,7 +33,7 @@ export const fetchProjects = async (baseUrl, selectedProject = null) => {
       throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
-    /** @type {Array<import('./opencode-types.js').Project>} */
+    /** @type {Array<import('@/shared/types/opencode.types.js').Project>} */
     const projects = await response.json();
 
     return projects;
@@ -96,7 +96,7 @@ export const fetchModels = async (baseUrl, selectedProject = null) => {
  * @param {string} baseUrl - Base URL of the opencode server
  * @param {string} projectId - Project ID to filter sessions
  * @param {Object} selectedProject - Currently selected project (for headers)
- * @returns {Promise<Array<import('./opencode-types.js').Session>>} - Array of sessions for the project
+ * @returns {Promise<Array<import('@/shared/types/opencode.types.js').Session>>} - Array of sessions for the project
  */
 export const fetchSessionsForProject = async (baseUrl, projectId, selectedProject = null) => {
   try {
@@ -118,7 +118,7 @@ export const fetchSessionsForProject = async (baseUrl, projectId, selectedProjec
       throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
     }
 
-    /** @type {Array<import('./opencode-types.js').Session>} */
+    /** @type {Array<import('@/shared/types/opencode.types.js').Session>} */
     const allSessions = await response.json();
 
     // Filter sessions by project ID
@@ -146,7 +146,7 @@ export const getProjectDisplayName = (worktree) => {
 
 /**
  * Get session summary text for display
- * @param {import('./opencode-types.js').Session} session - Session object
+ * @param {import('@/shared/types/opencode.types.js').Session} session - Session object
  * @returns {string} - Summary text
  */
 export const getSessionSummaryText = (session) => {

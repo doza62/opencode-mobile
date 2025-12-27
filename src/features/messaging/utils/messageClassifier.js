@@ -1,8 +1,8 @@
-import { getProjectDisplayName } from './projectManager.js';
+import { getProjectDisplayName } from '@/features';
 
 /**
  * Message classification utility for opencode SSE messages
- * @param {import('./opencode-types.js').GlobalEvent} item - The SSE message item to classify
+ * @param {import('../../../shared/types/opencode.types.js').GlobalEvent} item - The SSE message item to classify
  * @param {string} currentMode - Current mode ('build' or 'plan')
  * @returns {Object} - Classified message with metadata
  */

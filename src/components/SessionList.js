@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { getSessionSummaryText, formatSessionDate } from '../utils/projectManager';
+import { getSessionSummaryText, formatSessionDate } from '../features';
 
 /**
  * SessionList component for displaying project sessions as a clickable list
  * @param {Object} props - Component props
- * @param {Array<import('../utils/opencode-types.js').Session>} props.sessions - Array of sessions to display
+ * @param {Array<import('../shared/types/opencode.types.js').Session>} props.sessions - Array of sessions to display
  * @param {boolean} props.visible - Whether the modal is visible
  * @param {Function} props.onSessionSelect - Function called when a session is selected
  * @param {Function} props.onClose - Function called when modal is closed
