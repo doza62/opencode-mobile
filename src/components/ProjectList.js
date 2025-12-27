@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { getProjectDisplayName } from '../features';
+import { getProjectDisplayName } from '@/features';
 
 /**
  * ProjectList component for displaying available projects as centered cards

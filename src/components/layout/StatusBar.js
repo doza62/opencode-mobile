@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Dimensions, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
-import SessionBusyIndicator from '../common/SessionBusyIndicator';
-import BreadcrumbSlider from '../BreadcrumbSlider';
+import SessionBusyIndicator from '@/components/common/SessionBusyIndicator';
+import BreadcrumbSlider from '@/components/BreadcrumbSlider';
 
 /**
  * StatusBar component showing app title and connection status

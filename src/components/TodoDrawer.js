@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, FlatList } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import TodoStatusIcon from './common/TodoStatusIcon';
+import TodoStatusIcon from '@/components/common/TodoStatusIcon';
 
 /**
  * TodoDrawer component - A collapsible top drawer showing todo tasks

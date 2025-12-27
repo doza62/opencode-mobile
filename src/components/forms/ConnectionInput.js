@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-import PaperPlaneIcon from '../common/PaperPlaneIcon';
+import PaperPlaneIcon from '@/components/common/PaperPlaneIcon';
 
 /**
  * URLInput component for entering URL, connecting, and sending messages

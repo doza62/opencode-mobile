@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getProjectDisplayName } from '../features';
+import { getProjectDisplayName } from '@/features';
 
 /**
  * StatusInfoBar component displaying server URL, project, and session info

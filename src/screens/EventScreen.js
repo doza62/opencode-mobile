@@ -2,15 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Keyboard, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import StatusBar from '../components/layout/StatusBar';
-import ConnectionStatusBar from '../components/layout/ConnectionStatusBar';
-import SessionMessageFilter from '../components/SessionMessageFilter';
-import ProjectList from '../components/ProjectList';
-import SessionList from '../components/SessionList';
-import ConnectionInput from '../components/forms/ConnectionInput';
-import AppLogViewer from '../components/AppLogViewer';
-import UnclassifiedMessagesScreen from '../components/UnclassifiedMessagesScreen';
-import SessionThinkingIndicator from '../components/common/SessionThinkingIndicator';
+import StatusBar from '@/components/layout/StatusBar';
+import ConnectionStatusBar from '@/components/layout/ConnectionStatusBar';
+import SessionMessageFilter from '@/components/SessionMessageFilter';
+import ProjectList from '@/components/ProjectList';
+import SessionList from '@/components/SessionList';
+import ConnectionInput from '@/components/forms/ConnectionInput';
+import AppLogViewer from '@/components/AppLogViewer';
+import UnclassifiedMessagesScreen from '@/components/UnclassifiedMessagesScreen';
+import SessionThinkingIndicator from '@/components/common/SessionThinkingIndicator';
 
 export default function EventScreen(props) {
   const [showLogs, setShowLogs] = useState(false);

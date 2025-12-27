@@ -10,8 +10,8 @@ import {
   useModelManager,
   useTodoManager,
   useNotificationManager
-} from '../features';
-import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession, deleteSession } from '../features';
+} from '@/features';
+import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession, deleteSession } from '@/features';
 
 export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
   // Core state

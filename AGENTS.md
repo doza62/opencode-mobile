@@ -18,9 +18,13 @@
 - **Shared utilities**: Cross-cutting concerns in `shared/` (types, constants, helpers)
 
 ### Imports
-- **Centralized exports**: Import from `features/` index for feature modules
-- **Relative paths**: Use relative imports within feature modules
-- **Group imports**: React/React Native first, then local modules
+- **Path aliases enabled**: Use `@/` prefix for clean imports (configured in `metro.config.js`)
+- **Services**: `import { apiClient } from '@/services/api/client'`
+- **Features**: `import { useProjectManager } from '@/features'`
+- **Shared**: `import { STORAGE_KEYS } from '@/shared/constants/storage'`
+- **Components**: `import Component from '@/components/Component'`
+- **Fallback**: Relative paths for same-directory imports
+- **Group**: React/React Native first, then path aliases, then relative imports
 
 ### Formatting
 - **2 spaces indentation**, semicolons required, single quotes, trailing commas

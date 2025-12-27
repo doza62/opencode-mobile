@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { getProjectDisplayName } from '../../features';
+import { getProjectDisplayName } from '@/features';
 import ModelSelector from '../ModelSelector';
 import SessionStatusIndicator from '../SessionStatusIndicator';
 
