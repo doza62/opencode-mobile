@@ -7,11 +7,19 @@ import { getProjectDisplayName } from '../../projects/services/projectService';
  * @returns {Object} - Classified message with metadata
  */
 export const classifyMessage = (item, currentMode = 'build') => {
+  // Validate input structure
+  if (!item || typeof item !== 'object') {
+    console.warn('⚠️ classifyMessage received invalid input:', item);
+    return createFallbackMessage(item);
+  }
+
   const payloadType = item.payload?.type || 'unknown';
   const summaryBody = item.payload?.properties?.info?.summary?.body;
 
-  console.debug('📋 CLASSIFYING MESSAGE:', {
+  console.log('📋 CLASSIFYING MESSAGE:', {
     payloadType,
+    hasMessage: !!item.message,
+    messageType: typeof item.message,
     sessionId: item.session_id || item.sessionId || item.info?.sessionID || item.payload?.properties?.sessionID || item.payload?.properties?.info?.sessionID || item.payload?.properties?.part?.sessionID,
     mode: currentMode
   });
@@ -60,11 +68,11 @@ export const classifyMessage = (item, currentMode = 'build') => {
 
       // Classify based on role
       const role = item.payload?.properties?.info?.role;
-      const messageType = role === 'user' ? 'sent' : 'message_finalized';
+      const messageType = role === 'user' ? 'sent' : 'loaded_message';
 
       return {
         type: messageType,
-        category: 'message',
+        category: 'message',  // Show in main chat (historical messages)
         projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
         message: textContent,
         rawData: item,
@@ -100,8 +108,8 @@ export const classifyMessage = (item, currentMode = 'build') => {
       messageId: item.payload?.properties?.info?.id
     });
 
-    // Only finalize if summaryBody exists
-    if (summaryBody) {
+    // Only finalize if summaryBody is a non-empty string
+    if (summaryBody && typeof summaryBody === 'string' && summaryBody.trim()) {
       console.debug('✅ FINALIZING MESSAGE:', summaryBody.substring(0, 100) + '...');
       return {
         type: 'message_finalized',
@@ -116,10 +124,10 @@ export const classifyMessage = (item, currentMode = 'build') => {
         mode: item.payload?.properties?.info?.agent || 'build'
       };
     } else {
-      console.debug('🚫 INCOMPLETE MESSAGE.UPDATE - sending to unclassified - raw data:', JSON.stringify(item, null, 2));
+      console.debug('🚫 INCOMPLETE MESSAGE.UPDATE - treating as unclassified (debug only) - raw data:', JSON.stringify(item, null, 2));
       return {
         type: 'message_update_incomplete',
-        category: 'unclassified',  // Send to unclassified for debugging
+        category: 'unclassified',  // Show in debug screen only
         projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
         displayMessage: 'Incomplete message.update - missing summary body',
         rawData: item,
@@ -148,17 +156,33 @@ export const classifyMessage = (item, currentMode = 'build') => {
     };
   }
 
+  // Handle system reminder messages
+  if (payloadType === 'system-reminder') {
+  return {
+    type: 'system_reminder',
+    category: 'internal', // Don't show in UI - system internal messages
+    projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
+    displayMessage: 'System reminder message',
+    message: undefined, // Ensure no object message
+    rawData: item,
+    icon: 'ℹ️',
+    sessionId: sessionId,
+    payloadType: payloadType,
+    mode: item.info?.mode || 'build'
+  };
+  }
+
   // Handle messages with parts (incoming SSE messages)
   if (item.parts && Array.isArray(item.parts)) {
     const textParts = item.parts.filter(part => part && part.type === 'text');
     if (textParts.length > 0) {
       const textContent = textParts.map(part => part.text || '').join('\n');
       const role = item.info?.role;
-      const messageType = role === 'user' ? 'sent' : 'message_finalized';
+      const messageType = role === 'user' ? 'sent' : 'parts_message';
 
       return {
         type: messageType,
-        category: 'message',
+        category: 'message',  // Show in main chat (historical messages)
         projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
         message: textContent,
         rawData: item,
@@ -177,14 +201,33 @@ export const classifyMessage = (item, currentMode = 'build') => {
     hasSummaryBody: !!summaryBody,
     summaryBodyType: typeof summaryBody,
     summaryBodyLength: summaryBody ? String(summaryBody).length : 0,
+    hasMessage: !!item.message,
+    messageType: typeof item.message,
     rawPayloadKeys: item.payload ? Object.keys(item.payload) : 'no payload'
   });
+
+  // Ensure we have a string message for UI rendering
+  let displayMessage = 'Unknown message type';
+  let message = undefined; // Default to undefined for safety
+
+  if (typeof item.message === 'string' && item.message) {
+    displayMessage = item.message;
+    message = item.message; // Safe string
+  } else if (summaryBody && typeof summaryBody === 'string') {
+    displayMessage = summaryBody;
+    message = summaryBody; // Safe string
+  } else {
+    // Fallback: stringify the payload or the whole item
+    displayMessage = item.payload ? JSON.stringify(item.payload, null, 2) : JSON.stringify(item, null, 2);
+    message = undefined; // Don't set message to object
+  }
 
   return {
     type: 'unclassified',
     category: 'unclassified',
     projectName: item.projectName || getProjectDisplayName(item.directory) || 'Unknown Project',
-    displayMessage: JSON.stringify(item, null, 2),
+    displayMessage: displayMessage,
+    message: message, // Always a string or undefined
     rawData: item,
     icon: 'Warning',
     sessionId: sessionId,
@@ -223,6 +266,12 @@ const formatClassifiedMessage = (item, projectName, classification, icon) => {
 export const groupUnclassifiedMessages = (messages) => {
   const grouped = {};
 
+  // Handle undefined or non-array input
+  if (!Array.isArray(messages)) {
+    console.warn('⚠️ groupUnclassifiedMessages received non-array input:', messages);
+    return grouped;
+  }
+
   messages.forEach(message => {
     if (message.category === 'unclassified') {
       const payloadType = message.payloadType || 'unknown';
@@ -258,4 +307,23 @@ export const groupAllMessages = (messages) => {
   });
 
   return grouped;
+};
+
+/**
+ * Creates a fallback message for invalid/unparseable messages
+ * @param {Object} rawMessage - Raw message that couldn't be classified
+ * @returns {Object} - Basic unclassified message structure
+ */
+const createFallbackMessage = (rawMessage) => {
+  return {
+    type: 'unclassified',
+    category: 'unclassified',
+    projectName: 'Unknown Project',
+    displayMessage: 'Unable to classify message structure',
+    message: undefined, // Don't set message to avoid object display
+    rawData: rawMessage,
+    icon: '❌',
+    sessionId: rawMessage?.sessionId || rawMessage?.session_id || null,
+    payloadType: 'unknown'
+  };
 };

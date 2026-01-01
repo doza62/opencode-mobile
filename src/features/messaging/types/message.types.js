@@ -23,7 +23,7 @@
  * @property {Function} processMessage - Process raw message
  * @property {Function} addEvent - Add message to events
  * @property {Function} clearEvents - Clear all events
- * @property {Function} generateMessageId - Generate unique ID
+ * @property {Function} loadMessages - Load messages for session
  */
 
 // Export empty object to make this a valid module

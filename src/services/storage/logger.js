@@ -29,18 +29,36 @@ class Logger {
     // Logging disabled
   }
 
-  // Convenience methods - disabled
-  async info(message, data) { }
-  async warn(message, data) { }
-  async error(message, data) { }
-  async debug(message, data) { }
+  // Convenience methods - console fallback for mobile
+  async info(message, data) {
+    console.log(`[INFO] ${message}`, data);
+  }
+  async warn(message, data) {
+    console.warn(`[WARN] ${message}`, data);
+  }
+  async error(message, data) {
+    console.error(`[ERROR] ${message}`, data);
+  }
+  async debug(message, data) {
+    console.log(`[DEBUG] ${message}`, data);
+  }
 
-  // Log app events - disabled
-  async logAppStart() { }
-  async logScreenView(screenName, params = {}) { }
-  async logUserAction(action, details = {}) { }
-  async logNetworkRequest(url, method, status, duration) { }
-  async logError(error, context = {}) { }
+  // Log app events - console fallback
+  async logAppStart() {
+    console.log('[APP] App started');
+  }
+  async logScreenView(screenName, params = {}) {
+    console.log(`[SCREEN] Viewing ${screenName}`, params);
+  }
+  async logUserAction(action, details = {}) {
+    console.log(`[ACTION] ${action}`, details);
+  }
+  async logNetworkRequest(url, method, status, duration) {
+    console.log(`[NETWORK] ${method} ${url} - ${status} (${duration}ms)`);
+  }
+  async logError(error, context = {}) {
+    console.error('[ERROR]', error, context);
+  }
 }
 
 export default new Logger();

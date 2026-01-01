@@ -13,7 +13,8 @@ export { default as SessionThinkingIndicator } from './common/SessionThinkingInd
 
 // Other Components
 export { default as EventList } from './EventList';
-export { default as SessionDrawer } from './SessionDrawer';
+export { default as SessionMessageFilter } from './SessionMessageFilter';
+
 export { default as BreadcrumbSlider } from './BreadcrumbSlider';
 
 // Modal Components

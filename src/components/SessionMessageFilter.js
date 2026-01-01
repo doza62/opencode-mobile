@@ -9,13 +9,14 @@ import EventList from './EventList';
  * @param {Object} props.groupedUnclassifiedMessages - Grouped unclassified messages
  * @param {Function} props.onClearError - Function to clear errors
  */
-const MessageFilter = ({
+const SessionMessageFilter = ({
   events,
   selectedSession,
-  groupedUnclassifiedMessages,
+  groupedUnclassifiedMessages = {},
   onClearError,
   allUnclassifiedMessages, // Pass original unclassified messages for debug button
-  isThinking
+  isThinking,
+  allMessages // Alternative prop name that might be passed
 }) => {
 
 
@@ -24,7 +25,19 @@ const MessageFilter = ({
     console.log('Filtering events for session:', selectedSession?.id, 'total events:', events.length);
     const filtered = [];
 
-    events.forEach(event => {
+    events.forEach((event, index) => {
+      // Debug: Log problematic messages
+      if (typeof event.message === 'object' || event.payloadType === 'system-reminder') {
+        console.warn('⚠️ Potentially problematic message at index', index, ':', {
+          type: event.type,
+          category: event.category,
+          payloadType: event.payloadType,
+          messageType: typeof event.message,
+          hasMessage: !!event.message,
+          sessionId: event.sessionId
+        });
+      }
+
       // Filter by session ID if a session is selected
       if (selectedSession && event.sessionId && event.sessionId !== selectedSession.id) {
         console.log('Filtering out event from session:', event.sessionId);
@@ -39,6 +52,7 @@ const MessageFilter = ({
 
       // Don't show internal messages (session status is now handled by SessionStatusToggle)
       if (event.category === 'internal') {
+        console.log('Filtering out internal message:', event.payloadType);
         return;
       }
 
@@ -63,6 +77,12 @@ const MessageFilter = ({
   const filteredUnclassified = useMemo(() => {
     const filtered = {};
 
+    // Handle case where groupedUnclassifiedMessages is undefined
+    if (!groupedUnclassifiedMessages || typeof groupedUnclassifiedMessages !== 'object') {
+      console.warn('⚠️ groupedUnclassifiedMessages is undefined or not an object:', groupedUnclassifiedMessages);
+      return filtered;
+    }
+
     Object.entries(groupedUnclassifiedMessages).forEach(([type, messages]) => {
       filtered[type] = messages.filter(message => {
         // Exclude session.status messages that are busy/idle (handled internally)
@@ -80,7 +100,7 @@ const MessageFilter = ({
   return (
     <EventList
       events={filteredEvents}
-      groupedUnclassifiedMessages={allUnclassifiedMessages} // Pass original for debug button
+      groupedUnclassifiedMessages={allUnclassifiedMessages || allMessages} // Pass original for debug button
       error={null} // Handle errors separately
       onClearError={onClearError}
       isThinking={isThinking}
@@ -88,4 +108,4 @@ const MessageFilter = ({
   );
 };
 
-export default MessageFilter;
+export default SessionMessageFilter;

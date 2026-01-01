@@ -4,68 +4,74 @@ import Markdown from 'react-native-markdown-display';
 import { useTheme } from '../shared/components/ThemeProvider';
 import SessionThinkingIndicator from './common/SessionThinkingIndicator';
 
-const getMarkdownStyles = (theme) => ({
-  body: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  heading1: {
-    color: theme.colors.textPrimary,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  heading2: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  heading3: {
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  paragraph: {
-    marginBottom: 8,
-  },
-  link: {
-    color: theme.colors.accent,
-    textDecorationLine: 'underline',
-  },
-  code_inline: {
-    backgroundColor: theme.colors.surface,
-    fontFamily: 'monospace',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  code_block: {
-    backgroundColor: theme.colors.surface,
-    fontFamily: 'monospace',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  blockquote: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.border,
-    paddingLeft: 8,
-    marginLeft: 8,
-    fontStyle: 'italic',
-  },
-  list_item: {
-    marginBottom: 4,
-  },
-  strong: {
-    fontWeight: 'bold',
-  },
-  em: {
-    fontStyle: 'italic',
-  },
-});
+const getMarkdownStyles = (theme) => {
+  const isDark = theme.colors.background === '#000000';
+
+  return {
+    body: {
+      color: theme.colors.textPrimary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    heading1: {
+      color: theme.colors.textPrimary,
+      fontSize: 18,
+      fontWeight: 'bold',
+      marginBottom: 8,
+    },
+    heading2: {
+      color: theme.colors.textPrimary,
+      fontSize: 16,
+      fontWeight: 'bold',
+      marginBottom: 6,
+    },
+    heading3: {
+      color: theme.colors.textPrimary,
+      fontSize: 15,
+      fontWeight: 'bold',
+      marginBottom: 4,
+    },
+    paragraph: {
+      marginBottom: 8,
+    },
+    link: {
+      color: theme.colors.accent,
+      textDecorationLine: 'underline',
+    },
+    code_inline: {
+      backgroundColor: isDark ? '#000000' : theme.colors.surface,
+      color: isDark ? '#ffffff' : theme.colors.textPrimary,
+      fontFamily: 'monospace',
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    code_block: {
+      backgroundColor: isDark ? '#000000' : theme.colors.surface,
+      color: isDark ? '#ffffff' : theme.colors.textPrimary,
+      fontFamily: 'monospace',
+      padding: 8,
+      borderRadius: 4,
+      marginBottom: 8,
+    },
+    blockquote: {
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.border,
+      paddingLeft: 8,
+      marginLeft: 8,
+      fontStyle: 'italic',
+    },
+    list_item: {
+      marginBottom: 4,
+    },
+    strong: {
+      fontWeight: 'bold',
+    },
+    em: {
+      fontStyle: 'italic',
+    },
+  };
+};
 
 /**
  * EventList component for displaying SSE events
@@ -128,11 +134,6 @@ const EventList = ({ events, groupedUnclassifiedMessages, error, onClearError, i
       return null;
     }
 
-    // Don't render unclassified messages in the main UI
-    if (item.type === 'unclassified') {
-      return null;
-    }
-
 
 
     let itemStyle, typeStyle, messageStyle, containerStyle;
@@ -189,18 +190,34 @@ const EventList = ({ events, groupedUnclassifiedMessages, error, onClearError, i
       <View key={item.id} style={[styles.eventContainer, containerStyle]} pointerEvents="box-none">
         <View style={[styles.eventItem, itemStyle]} pointerEvents="box-none">
           <View style={[styles.markdownContainer, messageStyle]} pointerEvents="box-none">
-            <Markdown
-              style={dynamicMarkdownStyles}
-              maxWidth="100%"
-              rules={{
-                // Limit complex rules for performance
-                html_inline: () => null,
-                html_block: () => null,
-                image: () => null,
-              }}
-            >
-              {item.message || ''}
-            </Markdown>
+             <Markdown
+               style={dynamicMarkdownStyles}
+               maxWidth="100%"
+               rules={{
+                 // Limit complex rules for performance
+                 html_inline: () => null,
+                 html_block: () => null,
+                 image: () => null,
+               }}
+             >
+               {(() => {
+                 try {
+                   let content = '';
+                   if (typeof item.message === 'string') {
+                     content = item.message;
+                   } else if (item.displayMessage && typeof item.displayMessage === 'string') {
+                     content = item.displayMessage;
+                   } else {
+                     // Safely stringify any object content
+                     content = JSON.stringify(item.message || item.payload || item, null, 2);
+                   }
+                   return content || 'No content available';
+                 } catch (error) {
+                   console.error('Error rendering message content:', error, item);
+                   return `Error rendering message: ${error.message}`;
+                 }
+               })()}
+             </Markdown>
           </View>
         </View>
       </View>
@@ -462,4 +479,7 @@ const getStyles = (theme) => StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
+
 });
+
+export default EventList;

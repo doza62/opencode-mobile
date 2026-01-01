@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useTheme } from '../../shared/components/ThemeProvider';
 import PaperPlaneIcon from '../common/PaperPlaneIcon';
 
@@ -34,10 +34,15 @@ const URLInput = ({ inputUrl, onUrlChange, onConnect, onSendMessage, isConnectin
     }
   }, []);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (messageText.trim()) {
-      onSendMessage(messageText.trim(), mode);
-      setMessageText('');
+      try {
+        await onSendMessage(messageText.trim(), mode);
+        setMessageText('');
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        Alert.alert('Send Failed', 'Unable to send message. Please try again.');
+      }
     }
   };
 
@@ -140,6 +145,7 @@ const getStyles = (theme) => StyleSheet.create({
     padding: 12,
     fontSize: 14,
     backgroundColor: 'transparent',
+    color: theme.colors.textPrimary,
   },
   messageInput: {
     flex: 1,
@@ -149,6 +155,7 @@ const getStyles = (theme) => StyleSheet.create({
     padding: 12,
     fontSize: 14,
     backgroundColor: 'transparent',
+    color: theme.colors.textPrimary,
     minHeight: 32,
     maxHeight: 80,
   },

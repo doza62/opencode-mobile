@@ -4,8 +4,9 @@
 
 import StatusBar from '@/components/layout/StatusBar';
 import ConnectionStatusBar from '@/components/layout/ConnectionStatusBar';
-import SessionDrawer from '@/components/SessionDrawer';
+import EventList from '@/components/EventList';
 import SessionMessageFilter from '@/components/SessionMessageFilter';
+import { SessionDrawer, EdgeSwipeDetector } from '@/components/session-drawer';
 import ProjectList from '@/components/ProjectList';
 import SessionList from '@/components/SessionList';
 import ConnectionInput from '@/components/forms/ConnectionInput';
@@ -19,7 +20,6 @@ import SendIcon from '@/components/common/PaperPlaneIcon';
 import TodoStatusIcon from '@/components/common/TodoStatusIcon';
 import SessionBusyIndicator from '@/components/common/SessionBusyIndicator';
 import ThinkingIndicator from '@/components/ThinkingIndicator';
-import EventList from '@/components/EventList';
 import ModelSelector from '@/components/ModelSelector';
 import NotificationSettings from '@/components/NotificationSettings';
 import ProjectSelectionModal from '@/components/modals/ProjectSelectionModal';
@@ -41,24 +41,24 @@ import BreadcrumbSlider from '@/components/BreadcrumbSlider';
 export default function EventScreen(props) {
   const theme = useTheme();
 
-   const [showLogs, setShowLogs] = useState(false);
-   const [showInfoBar, setShowInfoBar] = useState(false);
-   const [debugVisible, setDebugVisible] = useState(false);
-   const [sessionModalVisible, setSessionModalVisible] = useState(false);
-   const [showEmbeddedSelector, setShowEmbeddedSelector] = useState(false);
-     const [sessionDrawerVisible, setSessionDrawerVisible] = useState(false);
-     const [sidebarVisible, setSidebarVisible] = useState(false); // For wide screens
-     const [debugSidebarVisible, setDebugSidebarVisible] = useState(false); // For debug sidebar
+    const [showLogs, setShowLogs] = useState(false);
+    const [showInfoBar, setShowInfoBar] = useState(false);
+    const [debugVisible, setDebugVisible] = useState(false);
+    const [sessionModalVisible, setSessionModalVisible] = useState(false);
+    const [showEmbeddedSelector, setShowEmbeddedSelector] = useState(false);
+      const [sessionDrawerVisible, setSessionDrawerVisible] = useState(false);
+    const [keyboardState, setKeyboardState] = useState({
+      isVisible: false,
+      isFloating: false,
+      height: 0,
+      position: { x: 0, y: 0, width: 0, height: 0 }
+    });
     const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-   const [viewAnimation] = useState(new Animated.Value(0));
-   const { width, height: screenHeight } = Dimensions.get('window');
-   const [keyboardState, setKeyboardState] = useState({
-     isVisible: false,
-     isFloating: false,
-     height: 0,
-     position: {}
-   });
+    const [viewAnimation] = useState(new Animated.Value(0));
+    const { width, height: screenHeight } = Dimensions.get('window');
     const isWideScreen = screenWidth >= 768;
+    const [sidebarVisible, setSidebarVisible] = useState(isWideScreen); // Start visible on wide screens
+    const [debugSidebarVisible, setDebugSidebarVisible] = useState(false); // For debug sidebar
 
     // Listen for screen dimension changes
     useEffect(() => {
@@ -126,43 +126,55 @@ export default function EventScreen(props) {
     }, [shouldShowProjectSelector]);
 
 
-   const {
-    events,
-    groupedUnclassifiedMessages,
-    groupedAllMessages,
-    isConnected,
-    isConnecting,
-    isServerReachable,
-    error,
-    inputUrl,
-    setInputUrl,
-      projects,
-      projectSessions,
-      sessionStatuses,
-      selectedProject,
-      selectedSession,
-      sessionLoading,
-    isSessionBusy,
-    todos,
-    providers,
-    selectedModel,
-    modelsLoading,
-    onModelSelect,
-    loadModels,
-    deleteSession,
-     connect,
-     disconnectFromEvents,
-    selectProject,
-    selectSession,
-    refreshSession,
-    createSession,
-    clearError,
-    sendMessage,
-    todoDrawerExpanded,
-    setTodoDrawerExpanded,
-  } = props;
+    const {
+     events,
+     groupedUnclassifiedMessages,
+     groupedAllMessages,
+     isConnected,
+     isConnecting,
+     isServerReachable,
+     error,
+     inputUrl,
+     setInputUrl,
+       projects,
+       projectSessions,
+       sessionStatuses,
+       selectedProject,
+       selectedSession,
+       sessionLoading,
+     isSessionBusy,
+     todos,
+     providers,
+     selectedModel,
+     modelsLoading,
+     onModelSelect,
+     loadModels,
+     deleteSession,
+      connect,
+      disconnectFromEvents,
+     selectProject,
+     selectSession,
+     refreshSession,
+     createSession,
+     clearError,
+     sendMessage,
+     todoDrawerExpanded,
+     setTodoDrawerExpanded,
+   } = props;
 
-   // Embedded project selector component
+    // Debug session data
+    console.log('Session data sample:', projectSessions?.[0] ? JSON.stringify(projectSessions[0], null, 2) : 'No sessions');
+
+    // Handle session selection - close drawer on mobile after selection
+    const handleSessionSelect = (session) => {
+      selectSession(session);
+      // Close drawer on mobile after session selection
+      if (!isWideScreen) {
+        setSessionDrawerVisible(false);
+      }
+    };
+
+    // Embedded project selector component
    const EmbeddedProjectSelector = ({ projects, onProjectSelect }) => (
      <View style={styles.selectorContainer}>
        <Text style={styles.selectorTitle}>Select a Project</Text>
@@ -453,14 +465,15 @@ export default function EventScreen(props) {
                  }]}
                  pointerEvents={showEmbeddedSelector ? 'none' : 'auto'}
                >
-                 <SessionMessageFilter
-                  events={events}
-                  selectedSession={selectedSession}
-                   groupedUnclassifiedMessages={groupedUnclassifiedMessages}
-                   onClearError={clearError}
-                   allMessages={groupedAllMessages}
-                  isThinking={isSessionBusy}
-                 />
+                   <SessionMessageFilter
+                     events={events}
+                     selectedSession={selectedSession}
+                     groupedUnclassifiedMessages={groupedUnclassifiedMessages}
+                     onClearError={clearError}
+                     allUnclassifiedMessages={groupedUnclassifiedMessages}
+                     isThinking={isSessionBusy}
+                     allMessages={groupedUnclassifiedMessages}
+                   />
                </Animated.View>
                <Animated.View
                  style={[styles.fullScreen, {
@@ -560,50 +573,55 @@ export default function EventScreen(props) {
 
         {/* Overlays */}
          {/* <ThinkingIndicator isThinking={isSessionBusy} /> */}
-         {/* Mobile sidebar (modal overlay) */}
-          {sessionDrawerVisible && !isWideScreen && (
+          {/* Mobile sidebar (modal overlay) */}
+           {!isWideScreen && (
+                <SessionDrawer
+                  visible={sessionDrawerVisible}
+                  isPersistent={false}
+                  sessions={projectSessions}
+                  selectedSession={selectedSession}
+                  selectedProject={selectedProject}
+                  projects={projects}
+                  sessionStatuses={sessionStatuses}
+                 sessionLoading={sessionLoading}
+                 onProjectSelect={async (project) => await selectProject(project)}
+                 onSessionSelect={handleSessionSelect}
+                deleteSession={deleteSession}
+                createSession={createSession}
+                onClose={() => setSessionDrawerVisible(false)}
+              />
+           )}
+
+          {/* Edge swipe detector for opening drawer */}
+          {!isWideScreen && !sessionDrawerVisible && (
+            <EdgeSwipeDetector onOpenDrawer={() => setSessionDrawerVisible(true)} />
+          )}
+          {/* Wide screen persistent sidebar */}
+          {isWideScreen && sidebarVisible && (
                <SessionDrawer
+                 isPersistent={true}
                  sessions={projectSessions}
                  selectedSession={selectedSession}
                  selectedProject={selectedProject}
                  projects={projects}
                  sessionStatuses={sessionStatuses}
-                sessionLoading={sessionLoading}
-                onProjectSelect={async (project) => await selectProject(project)}
-               onSessionSelect={selectSession}
-               deleteSession={deleteSession}
-               createSession={createSession}
-               onClose={() => setSessionDrawerVisible(false)}
-             />
-          )}
-         {/* Wide screen persistent sidebar */}
-         {isWideScreen && sidebarVisible && (
-           <View style={styles.persistentSidebar}>
-              <SessionDrawer
-                sessions={projectSessions}
-                selectedSession={selectedSession}
-                selectedProject={selectedProject}
-                projects={projects}
-                sessionStatuses={sessionStatuses}
-                sessionLoading={sessionLoading}
-                onProjectSelect={async (project) => {
-                  await selectProject(project);
-                  // On wide screens, ensure sidebar opens if it was closed
-                  if (isWideScreen && !sidebarVisible) {
-                    setSidebarVisible(true);
-                  }
+                 sessionLoading={sessionLoading}
+                 onProjectSelect={async (project) => {
+                   await selectProject(project);
+                   // On wide screens, ensure sidebar opens if it was closed
+                   if (isWideScreen && !sidebarVisible) {
+                     setSidebarVisible(true);
+                   }
+                 }}
+                onSessionSelect={(session) => {
+                  selectSession(session);
+                  // Keep sidebar open on wide screens for easy session switching
                 }}
-               onSessionSelect={(session) => {
-                 selectSession(session);
-                 // Keep sidebar open on wide screens for easy session switching
-               }}
-               deleteSession={deleteSession}
-               createSession={createSession}
-               onClose={() => setSidebarVisible(false)}
-               isPersistent={true}
-             />
-           </View>
-         )}
+                deleteSession={deleteSession}
+                createSession={createSession}
+                onClose={() => setSidebarVisible(false)}
+              />
+          )}
      </>
    );
   }

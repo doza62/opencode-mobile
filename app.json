@@ -3,7 +3,7 @@
     "name": "opencode-mobile",
     "slug": "opencode-mobile",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "system",
     "newArchEnabled": true,
@@ -19,6 +19,10 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+    "android": {
+      "package": "com.doza62.opencodemobile",
+      "permissions": []
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -33,7 +37,7 @@
     "updates": {
       "url": "https://u.expo.dev/2acd63e2-d8ab-4f1d-8270-f4fd80a3667b"
     },
-    "platforms": ["ios", "web"],
+    "platforms": ["ios", "web", "android"],
     "plugins": [
       "expo-asset"
     ]

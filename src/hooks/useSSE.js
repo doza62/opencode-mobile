@@ -12,6 +12,7 @@ import {
   useNotificationManager
 } from '../features';
 import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession, deleteSession } from '../features';
+import { generateMessageId } from '../features/messaging/utils/messageIdGenerator';
 import { storage } from '../services/storage/asyncStorage';
 import { useSessionStatus } from './useSessionStatus';
 
@@ -221,7 +222,7 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     setCurrentMode(mode);
 
     // Add sent message to UI immediately
-    const sentMessageId = messaging.generateMessageId();
+    const sentMessageId = generateMessageId();
     messaging.addEvent({
       id: sentMessageId,
       type: 'sent',
@@ -245,8 +246,8 @@ export const useSSE = (initialUrl = 'http://10.1.1.122:63425') => {
     } catch (error) {
       console.error('Message send failed:', error);
 
-      // Remove failed message from UI
-      messaging.clearEvents(); // Simplified - in real implementation, remove specific message
+      // Remove only the failed message from UI instead of clearing all events
+      messaging.removeEvent(sentMessageId);
 
       throw error;
     }
