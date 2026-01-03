@@ -1,6 +1,5 @@
 // API client with common functionality
-import { getRequestHeaders } from './requestUtils';
-import { API_TIMEOUTS } from '../../shared/constants/api';
+import { getRequestHeaders } from "./requestUtils";
 
 /**
  * Base API client for HTTP requests
@@ -15,13 +14,15 @@ export const apiClient = {
    */
   async get(url, options = {}, selectedProject = null) {
     const response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: getRequestHeaders(options.headers || {}, selectedProject),
-      ...options
+      ...options,
     });
 
     if (!response.ok) {
-      throw new Error(`GET ${url} failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `GET ${url} failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     return response;
@@ -37,17 +38,22 @@ export const apiClient = {
    */
   async post(url, data = null, options = {}, selectedProject = null) {
     const response = await fetch(url, {
-      method: 'POST',
-      headers: getRequestHeaders({
-        'Content-Type': 'application/json',
-        ...options.headers
-      }, selectedProject),
+      method: "POST",
+      headers: getRequestHeaders(
+        {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        selectedProject,
+      ),
       body: data ? JSON.stringify(data) : undefined,
-      ...options
+      ...options,
     });
 
     if (!response.ok) {
-      throw new Error(`POST ${url} failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `POST ${url} failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     return response;
@@ -63,17 +69,22 @@ export const apiClient = {
    */
   async put(url, data = null, options = {}, selectedProject = null) {
     const response = await fetch(url, {
-      method: 'PUT',
-      headers: getRequestHeaders({
-        'Content-Type': 'application/json',
-        ...options.headers
-      }, selectedProject),
+      method: "PUT",
+      headers: getRequestHeaders(
+        {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        selectedProject,
+      ),
       body: data ? JSON.stringify(data) : undefined,
-      ...options
+      ...options,
     });
 
     if (!response.ok) {
-      throw new Error(`PUT ${url} failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `PUT ${url} failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     return response;
@@ -88,13 +99,15 @@ export const apiClient = {
    */
   async delete(url, options = {}, selectedProject = null) {
     const response = await fetch(url, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: getRequestHeaders(options.headers || {}, selectedProject),
-      ...options
+      ...options,
     });
 
     if (!response.ok) {
-      throw new Error(`DELETE ${url} failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `DELETE ${url} failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     return response;
@@ -106,10 +119,12 @@ export const apiClient = {
    * @returns {Promise} - Parsed JSON
    */
   async parseJSON(response) {
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error(`Expected JSON response, got ${contentType || 'unknown content-type'}`);
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error(
+        `Expected JSON response, got ${contentType || "unknown content-type"}`,
+      );
     }
     return response.json();
-  }
+  },
 };

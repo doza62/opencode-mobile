@@ -7,12 +7,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // import { NavigationContainer } from '@react-navigation/native';
 // import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import EventScreen from './src/screens/EventScreen';
-import { useSSE } from './src/hooks/useSSE';
+ import ChatScreen from './src/ChatScreen';
+import { useSSEOrchestrator as useSSE } from './src/features/connection/hooks/useSSEOrchestrator';
 import { ThemeProvider, useTheme } from './src/shared/components/ThemeProvider';
+import { DEBUG } from './src/shared/constants';
+
+// Override console.debug based on DEBUG flag
+if (!DEBUG) {
+  console.debug = () => {};
+}
 
 // App start - entry point
-console.log('\n\n===== APP STARTED =====\n\n');
+console.debug('\n\n===== APP STARTED =====\n\n');
 
 // const Stack = createNativeStackNavigator();
 
@@ -23,7 +29,7 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <SafeAreaProvider>
-        <EventScreen {...sseData} />
+        <ChatScreen {...sseData} />
       </SafeAreaProvider>
       <StatusBar style={theme.colors.statusBarStyle} backgroundColor={theme.colors.background} />
     </GestureHandlerRootView>

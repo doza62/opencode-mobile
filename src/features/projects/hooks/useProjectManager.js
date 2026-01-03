@@ -1,7 +1,7 @@
 // Project and session management
 import { useState, useCallback, useEffect } from "react";
-import { apiClient } from "../../../services/api/client";
-import { storage } from "../../../services/storage/asyncStorage";
+import { apiClient } from "@/services/api/client";
+import { storage } from "@/shared/services/storage";
 
 export const useProjectManager = (baseUrl) => {
   const [projects, setProjects] = useState([]);
@@ -34,7 +34,7 @@ export const useProjectManager = (baseUrl) => {
       }
 
       try {
-        console.log(
+        console.debug(
           "Refreshing project sessions and statuses for project:",
           project.id,
         );
@@ -46,7 +46,7 @@ export const useProjectManager = (baseUrl) => {
           project,
         );
         const projectSessions = await apiClient.parseJSON(sessionResponse);
-        console.log(
+        console.debug(
           "Project sessions fetched:",
           projectSessions.length,
           "sessions for project",
@@ -61,7 +61,7 @@ export const useProjectManager = (baseUrl) => {
           project,
         );
         const statuses = await apiClient.parseJSON(statusResponse);
-        console.log("Session statuses:", statuses);
+        console.debug("Session statuses:", statuses);
         setSessionStatuses(statuses || {});
       } catch (error) {
         console.error("Failed to refresh project sessions:", error);
@@ -78,18 +78,16 @@ export const useProjectManager = (baseUrl) => {
 
     setLoading(true);
     try {
-      console.log("Loading projects from:", `${baseUrl}/project`);
+      console.debug("Loading projects from:", `${baseUrl}/project`);
       const response = await apiClient.get(`${baseUrl}/project`);
       const data = await apiClient.parseJSON(response);
-      console.log("Projects API response:", data);
       const projectsData = data.projects || data;
-      console.log("Projects data extracted:", projectsData);
       const newProjects = Array.isArray(projectsData) ? projectsData : [];
       setProjects(newProjects);
-      console.log("Projects set to:", newProjects);
+      console.debug("Projects set to:", newProjects);
       // Force a check
       setTimeout(
-        () => console.log("After setTimeout, projects state:", projects),
+        () => { console.debug("After setTimeout, projects state:", projects); },
         0,
       );
     } catch (error) {
@@ -193,6 +191,11 @@ export const useProjectManager = (baseUrl) => {
     async (sessionId) => {
       if (!baseUrl) {
         throw new Error("No base URL available");
+      }
+
+      // Validate sessionId parameter
+      if (!sessionId || typeof sessionId !== 'string') {
+        throw new Error(`Invalid sessionId: expected string, got ${typeof sessionId}`);
       }
 
       try {

@@ -23,11 +23,10 @@ export const formatTimestamp = (timestamp, options = {}) => {
   return date.toLocaleDateString();
 };
 
+import { Text } from 'react-native';
+
 /**
- * Truncate text with ellipsis
- * @param {string} text - Text to truncate
- * @param {number} maxLength - Maximum length
- * @returns {string} - Truncated text
+ * OpenCode formatting utilities
  */
 export const truncateText = (text, maxLength = 50) => {
   if (!text || text.length <= maxLength) return text;
@@ -67,4 +66,77 @@ export const camelToTitle = (str) => {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (char) => char.toUpperCase())
     .trim();
+};
+
+/**
+ * Get project display name from worktree path
+ * @param {string} worktree - Worktree path
+ * @returns {string} - Display name
+ */
+export const getProjectDisplayName = (worktree) => {
+  if (!worktree) return 'Unknown Project';
+
+  // Extract last part of path
+  const parts = worktree.split('/').filter(part => part.trim().length > 0);
+  return parts.length > 0 ? parts[parts.length - 1] : 'Unknown Project';
+};
+
+/**
+ * Get session summary text for display
+ * @param {import('../types/opencode.types.js').Session} session - Session object
+ * @returns {string} - Summary text
+ */
+export const getSessionSummaryText = (session) => {
+  if (!session.summary) return '';
+
+  const { additions, deletions, files } = session.summary;
+  const parts = [];
+
+  if (additions > 0) parts.push(`+${additions}`);
+  if (deletions > 0) parts.push(`-${deletions}`);
+  if (files > 0) parts.push(`${files} files`);
+
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+};
+
+export const getColoredSessionSummary = (session, theme) => {
+  if (!session.summary) return null;
+
+  const { additions, deletions, files } = session.summary;
+  const parts = [];
+
+  if (additions > 0) parts.push(
+    <Text key="add" style={{ color: theme.colors.success }}>
+      +{additions}
+    </Text>
+  );
+  if (deletions > 0) parts.push(
+    <Text key="del" style={{ color: theme.colors.error }}>
+      -{deletions}
+    </Text>
+  );
+  if (files > 0) parts.push(
+    <Text key="files" style={{ color: theme.colors.textSecondary }}>
+      {files} files
+    </Text>
+  );
+
+  return parts.length > 0 ? (
+    <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+      {' ('}
+      {parts.reduce((acc, part, i) =>
+        i === 0 ? [part] : [...acc, <Text key={`sep-${i}`}>, </Text>, part], []
+      )}
+      {')'}
+    </Text>
+  ) : null;
+};
+
+/**
+ * Format session timestamp for display
+ * @param {number} timestamp - Unix timestamp
+ * @returns {string} - Formatted date string
+ */
+export const formatSessionDate = (timestamp) => {
+  return formatTimestamp(timestamp, { relative: true });
 };

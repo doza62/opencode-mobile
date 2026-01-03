@@ -1,9 +1,9 @@
 // Message processing and event management
 import { useState, useCallback, useEffect } from 'react';
-import { classifyMessage, groupUnclassifiedMessages, groupAllMessages } from '../utils/messageClassifier';
-import { normalizeLoadedMessages, normalizationMetrics } from '../utils/messageNormalizer';
-import { generateMessageId } from '../utils/messageIdGenerator';
-import { apiClient } from '../../../services/api/client';
+import { classifyMessage, groupUnclassifiedMessages, groupAllMessages } from '@/features/messaging/utils/messageClassifier';
+import { normalizeLoadedMessages, normalizationMetrics } from '@/features/messaging/utils/messageNormalizer';
+import { generateMessageId } from '@/features/messaging/utils/messageIdGenerator';
+import { apiClient } from '@/services/api/client';
 
 export const useMessageProcessing = () => {
   const [events, setEvents] = useState([]);
@@ -19,13 +19,12 @@ export const useMessageProcessing = () => {
     }
 
     try {
-      console.log('💬 Loading messages for session:', sessionId);
+      console.debug('💬 Loading messages for session:', sessionId);
       const response = await apiClient.get(`${baseUrl}/session/${sessionId}/message?limit=100`, {}, selectedProject);
       const data = await apiClient.parseJSON(response);
-      console.log('💬 Loaded messages data:', data);
 
       if (data && Array.isArray(data)) {
-        console.log(`📥 Received ${data.length} messages from API`);
+        console.debug(`📥 Received ${data.length} messages from API`);
         // Start performance monitoring
         const startTime = performance.now();
 
@@ -36,14 +35,14 @@ export const useMessageProcessing = () => {
             batchSize: 25, // Smaller batch for better responsiveness
             enableParallel: false, // Keep simple for now
             onProgress: (progress) => {
-              console.log(`🔄 Normalization progress: ${progress.processed}/${progress.total}`);
+              console.debug(`🔄 Normalization progress: ${progress.processed}/${progress.total}`);
             },
             onError: (error, batch) => {
               console.warn('⚠️ Batch normalization error:', error, 'Batch size:', batch.length);
             }
           });
-          console.log(`✅ Successfully normalized ${normalizedMessages.length} messages`);
-        } catch (normalizationError) {
+          console.debug(`✅ Successfully normalized ${normalizedMessages.length} messages`);
+         } catch (normalizationError) {
           console.error('❌ Normalization failed, falling back to raw message processing:', normalizationError);
           // Fallback: use raw messages without normalization
           normalizedMessages = data;
@@ -71,9 +70,9 @@ export const useMessageProcessing = () => {
           processingTime
         );
 
-        console.log(`💬 Loaded and classified ${classifiedMessages.length} messages in ${processingTime.toFixed(2)}ms`);
-        console.log('📊 Normalization metrics:', normalizationMetrics.getStats());
-        console.log('📋 Sample classified messages:', classifiedMessages.slice(0, 2).map(msg => ({
+        console.debug(`💬 Loaded and classified ${classifiedMessages.length} messages in ${processingTime.toFixed(2)}ms`);
+        console.debug('📊 Normalization metrics:', normalizationMetrics.getStats());
+        console.debug('📋 Sample classified messages:', classifiedMessages.slice(0, 2).map(msg => ({
           type: msg.type,
           category: msg.category,
           hasMessage: !!msg.message,
@@ -90,12 +89,6 @@ export const useMessageProcessing = () => {
   // Process incoming messages
   const processMessage = useCallback((rawMessage, currentMode) => {
     const classifiedMessage = classifyMessage(rawMessage, currentMode);
-
-    console.log('⚙️ PROCESSED MESSAGE:', {
-      type: classifiedMessage.type,
-      category: classifiedMessage.category,
-      hasMessage: !!classifiedMessage.message
-    });
 
     // Track ALL messages for debugging
     setAllMessages(prev => [...prev, classifiedMessage]);
@@ -122,7 +115,7 @@ export const useMessageProcessing = () => {
 
   // Clear all events
   const clearEvents = useCallback(() => {
-    console.log('🧹 Clearing all messaging events and state');
+    console.debug('🧹 Clearing all messaging events and state');
     setEvents([]);
     setUnclassifiedMessages([]);
     setAllMessages([]);

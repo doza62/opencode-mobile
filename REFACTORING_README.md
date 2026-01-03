@@ -89,13 +89,13 @@ src/
 - [ ] Update all dependent components
 - [ ] Fix breaking changes immediately
 
-### Phase 5: Break Down EventScreen.js ✅ COMPLETED
+### Phase 5: Break Down ChatScreen.js ✅ COMPLETED
 
 **Create Modal Components:**
 - [x] `ConnectionModal.js`, `ProjectSelectionModal.js`, `SessionSelectionModal.js`
 - [x] `DebugModal.js`, `LogModal.js`
 
-**Refactor EventScreen:**
+**Refactor ChatScreen:**
 - [ ] Simplify to modal orchestrator
 - [ ] Remove complex state management
 

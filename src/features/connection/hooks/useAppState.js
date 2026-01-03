@@ -12,7 +12,7 @@ export const useAppState = (selectedSession) => {
       // Handle app state changes for notifications
       if (nextAppState === 'inactive' && selectedSession) {
         // Could trigger notifications here
-        console.log('App going inactive with active session');
+        console.debug('App going inactive with active session');
       }
     });
 

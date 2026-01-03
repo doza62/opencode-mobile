@@ -124,7 +124,7 @@ export const applyConfigPreset = (presetName) => {
   }
 
   Object.assign(NORMALIZATION_CONFIG, preset);
-  console.log(`⚙️ Applied normalization config preset: ${presetName}`);
+  console.debug(`⚙️ Applied normalization config preset: ${presetName}`);
   return { ...NORMALIZATION_CONFIG };
 };
 
@@ -135,7 +135,7 @@ export const applyConfigPreset = (presetName) => {
  */
 export const updateConfig = (updates) => {
   Object.assign(NORMALIZATION_CONFIG, updates);
-  console.log('⚙️ Updated normalization config:', updates);
+  console.debug('⚙️ Updated normalization config:', updates);
   return { ...NORMALIZATION_CONFIG };
 };
 
@@ -199,12 +199,12 @@ export const debugUtils = {
     const structure = detectMessageStructure(message);
     const validation = validateMessageStructure(message, structure);
 
-    console.group(`🔍 Message Structure Analysis [${context}]`);
-    console.log('Structure Type:', structure);
-    console.log('Validation:', validation);
-    console.log('Message Keys:', Object.keys(message));
-    console.log('Payload Keys:', message.payload ? Object.keys(message.payload) : 'none');
-    console.log('Full Message:', message);
+    console.debug(`🔍 Message Structure Analysis [${context}]`);
+    console.debug('Structure Type:', structure);
+    console.debug('Validation:', validation);
+    console.debug('Message Keys:', Object.keys(message));
+    console.debug('Payload Keys:', message.payload ? Object.keys(message.payload) : 'none');
+    console.debug('Full Message:', message);
     console.groupEnd();
   },
 

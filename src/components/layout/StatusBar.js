@@ -11,12 +11,11 @@ import {
   Dimensions,
   Alert,
 } from "react-native";
-import { getProjectDisplayName } from "../../features";
-import { useNavigation } from "@react-navigation/native";
-import { useTheme } from "../../shared/components/ThemeProvider";
-import Svg, { Path } from "react-native-svg";
-import SessionBusyIndicator from "../common/SessionBusyIndicator";
-import BreadcrumbSlider from "../BreadcrumbSlider";
+import { getProjectDisplayName } from "@/shared";
+import { useTheme } from "@/shared/components/ThemeProvider";
+import { SessionBusyIndicator } from "@/features/sessions/components";
+import { BreadcrumbSlider } from "@/shared/components";
+import Svg, { Path } from 'react-native-svg';
 
 /**
  * StatusBar component showing app title and connection status
@@ -285,11 +284,10 @@ const StatusBar = ({
          />
        </View> */}
 
-      {/* Bottom Row: Session Title and Actions */}
-      {/* <View style={styles.bottomRow}>
-         <TouchableOpacity style={styles.titleContainer} onPress={toggleDropdown}>
-           {console.log('StatusBar render: selectedSession title:', selectedSession?.title)}
-           <Text style={styles.appTitle} numberOfLines={1}>{truncateTitle(selectedSession?.title)}</Text>
+       {/* Bottom Row: Session Title and Actions */}
+       {/* <View style={styles.bottomRow}>
+          <TouchableOpacity style={styles.titleContainer} onPress={toggleDropdown}>
+            <Text style={styles.appTitle} numberOfLines={1}>{truncateTitle(selectedSession?.title)}</Text>
             <Svg width={12} height={12} viewBox="0 0 24 24" style={styles.dropdownArrow}>
              <Path d={dropdownVisible ? "M7 10l5 5 5-5z" : "M10 7l5 5-5 5z"} fill="#666666" />
            </Svg>

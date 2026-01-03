@@ -15,7 +15,7 @@ class NotificationService {
    */
   async initialize() {
     if (!Device.isDevice) {
-      console.log('Notifications not available on simulator');
+      console.debug('Notifications not available on simulator');
       this.isInitialized = false;
       return;
     }
@@ -29,7 +29,7 @@ class NotificationService {
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Notification permissions not granted');
+      console.debug('Notification permissions not granted');
       this.isInitialized = false;
       return;
     }
@@ -44,7 +44,7 @@ class NotificationService {
     });
 
     this.isInitialized = true;
-    console.log('Notifications initialized for local use only');
+    console.debug('Notifications initialized for local use only');
   }
 
   /**
@@ -55,7 +55,7 @@ class NotificationService {
    */
   async scheduleNotification(title, body, data = {}) {
     if (!this.isInitialized) {
-      console.log('Notifications not initialized, skipping:', { title, body, data });
+      console.debug('Notifications not initialized, skipping:', { title, body, data });
       return;
     }
 
@@ -72,7 +72,7 @@ class NotificationService {
       console.error('Failed to check notification settings:', error);
     }
 
-    console.log('Scheduling local notification:', { title, body, data });
+    console.debug('Scheduling local notification:', { title, body, data });
     await Notifications.scheduleNotificationAsync({
       content: {
         title,

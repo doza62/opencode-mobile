@@ -7,7 +7,7 @@ export const useNotificationManager = () => {
 
   const scheduleNotification = useCallback(async (title, body, data = {}) => {
     // Placeholder - actual implementation would use expo-notifications
-    console.log('Notification scheduled:', { title, body, data });
+    console.debug('Notification scheduled:', { title, body, data });
   }, []);
 
   return {

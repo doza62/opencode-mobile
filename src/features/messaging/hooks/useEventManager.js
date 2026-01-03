@@ -1,6 +1,6 @@
 // Event management for SSE messages
 import { useEffect } from 'react';
-import { sseService } from '../../../services/sse/sse.service';
+import { sseService } from '@/features/connection/services/sseService';
 
 export const useEventManager = (onMessage, selectedSession) => {
   useEffect(() => {

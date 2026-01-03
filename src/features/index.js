@@ -6,12 +6,7 @@ export { useModelManager } from './models';
 export { useTodoManager } from './todos';
 export { useNotificationManager } from './notifications';
 
-// Commonly used utility functions
-export {
-  getProjectDisplayName,
-  getSessionSummaryText,
-  formatSessionDate
-} from './projects/services/projectService';
+// Commonly used utility functions moved to shared
 
 export {
   sendMessageToSession,
@@ -19,4 +14,4 @@ export {
   hasActiveSession,
   setCurrentSession,
   deleteSession
-} from './projects/services/sessionService';
+} from './sessions/services/sessionService';

@@ -1,5 +1,5 @@
 // Model preference storage utilities
-import { storage } from '../../../services/storage/asyncStorage';
+import { storage } from '@/shared/services/storage';
 import { STORAGE_KEYS } from '../../../shared/constants/storage';
 
 /**
@@ -14,7 +14,7 @@ export const saveLastSelectedModel = async (providerId, modelId) => {
     timestamp: Date.now()
   };
   await storage.set(STORAGE_KEYS.LAST_SELECTED_MODEL, modelData);
-  console.log('💾 Saved last selected model:', modelData);
+  console.debug('💾 Saved last selected model:', modelData);
 };
 
 /**
@@ -24,7 +24,7 @@ export const saveLastSelectedModel = async (providerId, modelId) => {
 export const loadLastSelectedModel = async () => {
   const modelData = await storage.get(STORAGE_KEYS.LAST_SELECTED_MODEL);
   if (modelData) {
-    console.log('📚 Loaded last selected model:', modelData);
+    console.debug('📚 Loaded last selected model:', modelData);
     return modelData;
   }
   return null;

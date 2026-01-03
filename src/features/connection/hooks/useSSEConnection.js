@@ -1,6 +1,6 @@
 // Pure SSE connection management
 import { useState, useRef, useEffect } from 'react';
-import { sseService } from '../../../services/sse/sse.service';
+import { sseService } from '../services/sseService';
 
 export const useSSEConnection = (baseUrl, heartbeatCallback = null) => {
   const [isConnected, setIsConnected] = useState(false);
@@ -35,9 +35,9 @@ export const useSSEConnection = (baseUrl, heartbeatCallback = null) => {
 
   // Auto-connect when baseUrl changes
   useEffect(() => {
-    console.log('useSSEConnection: baseUrl changed to', baseUrl);
+    console.debug('useSSEConnection: baseUrl changed to', baseUrl);
     if (baseUrl && !isConnected && !isConnecting) {
-      console.log('useSSEConnection: calling connect');
+      console.debug('useSSEConnection: calling connect');
       connect();
     }
     return () => disconnect();

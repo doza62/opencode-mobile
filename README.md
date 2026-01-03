@@ -57,7 +57,7 @@ A React Native mobile application that connects to a Server-Sent Events (SSE) se
 
 ## Configuration
 
-To connect to your SSE endpoint, modify the URL in `src/screens/EventScreen.js`:
+ To connect to your SSE endpoint, modify the URL in `src/ChatScreen.js`:
 
 ```javascript
 const eventSource = new EventSource('https://your-sse-endpoint.com/events');
@@ -70,8 +70,7 @@ const eventSource = new EventSource('https://your-sse-endpoint.com/events');
 ├── App.js                  # Main application entry point
 ├── package.json            # Project dependencies and scripts
 ├── src/
-│   ├── screens/
-│   │   └── EventScreen.js  # Main screen with SSE functionality
+│   ├── ChatScreen.js       # Main chat screen with SSE functionality
 │   └── components/         # Reusable components
 └── assets/                # Static assets (images, fonts, etc.)
 ```

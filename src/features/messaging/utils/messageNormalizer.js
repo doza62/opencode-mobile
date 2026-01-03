@@ -4,26 +4,8 @@
  */
 
 import { generateMessageId } from './messageIdGenerator';
-
-/**
- * Schema definitions for different message types
- */
-const MESSAGE_SCHEMAS = {
-  // SSE message structure (nested payload)
-  SSE: {
-    hasPayload: true,
-    payloadPath: 'payload',
-    propertiesPath: 'payload.properties',
-    infoPath: 'payload.properties.info'
-  },
-
-  // API loaded message structure (potentially flat)
-  LOADED: {
-    hasPayload: false,
-    propertiesPath: 'properties',
-    infoPath: 'info'
-  }
-};
+import { MESSAGE_SCHEMAS } from '@/shared/constants';
+import { logger } from '@/shared';
 
 /**
  * Detects the structure type of a message
@@ -109,7 +91,7 @@ export const normalizeLoadedMessage = (loadedMessage) => {
     }
 
     if (structureType === 'UNKNOWN') {
-      console.warn('⚠️ Unable to determine message structure, applying fallback transformation');
+      logger.warn('Unable to determine message structure, applying fallback transformation');
       return createFallbackMessage(loadedMessage);
     }
 
@@ -140,7 +122,7 @@ export const normalizeLoadedMessage = (loadedMessage) => {
       normalized.id = generateMessageId();
     }
 
-    console.debug('🔄 Normalized loaded message:', {
+    logger.debug('Normalized loaded message', {
       originalType: loadedMessage.type,
       structureType,
       normalizedType: normalized.payload?.type,
@@ -150,7 +132,7 @@ export const normalizeLoadedMessage = (loadedMessage) => {
     return normalized;
 
   } catch (error) {
-    console.error('❌ Failed to normalize loaded message:', error);
+    logger.error('Failed to normalize loaded message', error);
     return createFallbackMessage(loadedMessage);
   }
 };
@@ -169,20 +151,14 @@ export const normalizeLoadedMessages = (rawMessages, options = {}) => {
     onError = null
   } = options;
 
-  console.log(`🔄 normalizeLoadedMessages called with ${rawMessages?.length || 0} messages, type: ${typeof rawMessages}`);
-
   if (!Array.isArray(rawMessages)) {
-    console.warn('⚠️ normalizeLoadedMessages expects an array, received:', typeof rawMessages);
+    logger.warn('normalizeLoadedMessages expects an array', { received: typeof rawMessages });
     return [];
   }
 
   if (rawMessages.length === 0) {
-    console.log('🔄 No messages to normalize');
     return [];
   }
-
-  console.log(`🔄 Normalizing ${rawMessages.length} loaded messages (batch size: ${batchSize})`);
-  console.log('🔄 Sample raw message:', rawMessages[0]);
 
   const normalized = [];
   const errors = [];
@@ -207,7 +183,7 @@ export const normalizeLoadedMessages = (rawMessages, options = {}) => {
       }
 
     } catch (batchError) {
-      console.error(`❌ Batch normalization failed for batch ${Math.floor(i/batchSize) + 1}:`, batchError);
+      logger.error(`Batch normalization failed for batch ${Math.floor(i/batchSize) + 1}`, batchError);
       errors.push({ batchIndex: Math.floor(i/batchSize), error: batchError });
 
       if (onError) {
@@ -218,7 +194,7 @@ export const normalizeLoadedMessages = (rawMessages, options = {}) => {
     }
   }
 
-  console.log(`✅ Normalized ${normalized.length} messages (${errors.length} batch errors)`);
+  logger.emoji('✅', `Normalized ${normalized.length} messages (${errors.length} batch errors)`);
 
   return normalized;
 };
@@ -280,27 +256,7 @@ export const normalizationMetrics = {
   }
 };
 
-/**
- * Configuration for different normalization strategies
- */
-export const NORMALIZATION_CONFIG = {
-  // Enable/disable features
-  enableValidation: true,
-  enableMetrics: true,
-  enableParallelProcessing: true,
-
-  // Performance tuning
-  defaultBatchSize: 50,
-  maxBatchSize: 200,
-
-  // Error handling
-  maxRetries: 3,
-  errorThreshold: 0.1, // 10% error rate triggers warning
-
-  // Logging
-  logLevel: 'debug', // 'debug', 'info', 'warn', 'error'
-  enableStructureLogging: true
-};
+import { NORMALIZATION_CONFIG } from '@/shared/constants';
 
 /**
  * Plugin system for extensible normalization (future-proofing)
@@ -335,7 +291,7 @@ export const registerNormalizerPlugin = (plugin) => {
   }
 
   normalizerPlugins.push(plugin);
-  console.log(`🔌 Registered normalization plugin: ${plugin.name}`);
+  logger.emoji('🔌', `Registered normalization plugin: ${plugin.name}`);
 };
 
 /**
@@ -434,5 +390,5 @@ export const initializeDefaultPlugins = () => {
     registerNormalizerPlugin(telemetryPlugin);
   }
 
-  console.log(`🔌 Initialized ${normalizerPlugins.length} normalization plugins`);
+  logger.emoji('🔌', `Initialized ${normalizerPlugins.length} normalization plugins`);
 };

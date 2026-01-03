@@ -1,8 +1,8 @@
-import { getProjectDisplayName } from '../../projects/services/projectService';
+import { getProjectDisplayName } from '@/shared/helpers/formatting';
 
 /**
  * Message classification utility for opencode SSE messages
- * @param {import('../../../shared/types/opencode.types.js').GlobalEvent} item - The SSE message item to classify
+ * @param {import('@/shared/types/opencode.types.js').GlobalEvent} item - The SSE message item to classify
  * @param {string} currentMode - Current mode ('build' or 'plan')
  * @returns {Object} - Classified message with metadata
  */
@@ -15,14 +15,6 @@ export const classifyMessage = (item, currentMode = 'build') => {
 
   const payloadType = item.payload?.type || 'unknown';
   const summaryBody = item.payload?.properties?.info?.summary?.body;
-
-  console.log('📋 CLASSIFYING MESSAGE:', {
-    payloadType,
-    hasMessage: !!item.message,
-    messageType: typeof item.message,
-    sessionId: item.session_id || item.sessionId || item.info?.sessionID || item.payload?.properties?.sessionID || item.payload?.properties?.info?.sessionID || item.payload?.properties?.part?.sessionID,
-    mode: currentMode
-  });
 
   // Fix session ID extraction - check multiple possible locations
   const sessionId = item.session_id ||
