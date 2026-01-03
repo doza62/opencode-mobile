@@ -57,8 +57,8 @@ export const groupSessionsByDateAndParent = (sessions) => {
   // Combine parents and orphans for date grouping (children are nested)
   const allDisplaySessions = [...parentSessions, ...orphanedSessions];
 
-  // Group by date
-  const groups = {};
+  // Group by date, always including Today
+  const groups = { 'Today': [] };
   allDisplaySessions.forEach(session => {
     const dateKey = formatNaturalDate(new Date(session.time?.updated || session.time?.created));
     if (!groups[dateKey]) groups[dateKey] = [];
@@ -66,8 +66,26 @@ export const groupSessionsByDateAndParent = (sessions) => {
   });
 
   // Convert to sections format for SectionList
-  return Object.entries(groups).map(([title, data]) => ({
+  const sections = Object.entries(groups).map(([title, data]) => ({
     title,
     data: data.sort((a, b) => new Date(b.time?.updated || b.time?.created) - new Date(a.time?.updated || a.time?.created))
   }));
+
+  // Sort sections: Today (0) -> Yesterday (1) -> Other dates (2, sorted descending)
+  sections.sort((a, b) => {
+    const priorities = { 'Today': 0, 'Yesterday': 1 };
+    const aPriority = priorities[a.title] ?? 2;
+    const bPriority = priorities[b.title] ?? 2;
+
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    if (aPriority === 2 && bPriority === 2) {
+      // Sort date sections descending (newest dates first)
+      const aDate = new Date(a.title);
+      const bDate = new Date(b.title);
+      return bDate - aDate;
+    }
+    return 0;
+  });
+
+  return sections;
 };

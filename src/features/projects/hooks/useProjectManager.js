@@ -46,13 +46,19 @@ export const useProjectManager = (baseUrl) => {
           project,
         );
         const projectSessions = await apiClient.parseJSON(sessionResponse);
+        const validSessions = projectSessions.filter(session =>
+          session &&
+          typeof session === 'object' &&
+          session.id &&
+          typeof session.id === 'string'
+        );
         console.debug(
           "Project sessions fetched:",
-          projectSessions.length,
-          "sessions for project",
+          validSessions.length,
+          "valid sessions for project",
           project.id,
         );
-        setProjectSessions(projectSessions);
+        setProjectSessions(validSessions);
 
         // Fetch statuses
         const statusResponse = await apiClient.get(
@@ -138,6 +144,10 @@ export const useProjectManager = (baseUrl) => {
   // Select a session
   const selectSession = useCallback(
     async (session) => {
+      if (session && (!session.id || typeof session.id !== 'string')) {
+        console.warn('Invalid session selected:', session);
+        return;
+      }
       setSelectedSession(session);
 
       // Save selected session

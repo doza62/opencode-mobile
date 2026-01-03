@@ -1,5 +1,5 @@
  import React, { useEffect, useState, useRef } from 'react';
- import { StyleSheet, View, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Animated, Dimensions, Keyboard } from 'react-native';
+ import { StyleSheet, View, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Animated, useWindowDimensions, Keyboard } from 'react-native';
  import { SafeAreaView } from 'react-native-safe-area-context';
 
  import StatusBar from '@/components/layout/StatusBar';
@@ -48,21 +48,14 @@
      const [debugVisible, setDebugVisible] = useState(false);
      const [sessionModalVisible, setSessionModalVisible] = useState(false);
      const [showEmbeddedSelector, setShowEmbeddedSelector] = useState(false);
-     const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
-     const { width, height: screenHeight } = Dimensions.get('window');
-     const isWideScreen = width >= 768;
+      const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+      const isWideScreen = screenWidth >= 768;
      const { sidebarVisible, sessionDrawerVisible, toggleSidebar, setSidebarVisible, setSessionDrawerVisible } = useSidebarState(isWideScreen);
      const keyboardState = useKeyboardState();
      const [debugSidebarVisible, setDebugSidebarVisible] = useState(false); // For debug sidebar
       const viewAnimation = useRef(new Animated.Value(0)).current; // For view transitions
 
-     // Listen for screen dimension changes
-     useEffect(() => {
-       const subscription = Dimensions.addEventListener('change', ({ window }) => {
-         setScreenWidth(window.width);
-       });
-       return () => subscription?.remove();
-     }, []);
+
 
 
 
@@ -340,9 +333,9 @@
                 <Animated.View
                   style={[styles.fullScreen, {
                     transform: [{
-                      translateX: viewAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -width],
+                       translateX: viewAnimation.interpolate({
+                         inputRange: [0, 1],
+                         outputRange: [0, -screenWidth],
                       }),
                     }],
                   }]}
@@ -361,9 +354,9 @@
                 <Animated.View
                   style={[styles.fullScreen, {
                     transform: [{
-                      translateX: viewAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [width, 0],
+                       translateX: viewAnimation.interpolate({
+                         inputRange: [0, 1],
+                         outputRange: [screenWidth, 0],
                       }),
                     }],
                   }]}

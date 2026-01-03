@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, TouchableOpacity, StyleSheet, Modal, FlatList, Text, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Modal, FlatList, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/shared/components/ThemeProvider';
 import { ProjectSelectorButton } from '@/features/projects/components';
@@ -17,8 +17,7 @@ const DrawerHeader = ({
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = Dimensions.get('window');
-  const styles = useMemo(() => createStyles(theme, insets, screenWidth), [theme, insets]);
+  const styles = useMemo(() => createStyles(theme, insets), [theme, insets]);
 
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [projectDropdownVisible, setProjectDropdownVisible] = useState(false);

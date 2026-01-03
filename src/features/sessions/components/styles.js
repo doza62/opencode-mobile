@@ -1,5 +1,5 @@
 // styles.js - Centralized styles for session drawer components
-export const createStyles = (theme, insets, screenWidth) => ({
+export const createStyles = (theme, insets) => ({
   // OVERLAY & POSITIONING
   overlay: {
     position: 'absolute',
@@ -20,7 +20,9 @@ export const createStyles = (theme, insets, screenWidth) => ({
     left: 0,
     top: insets.top,
     bottom: 0,
-    width: screenWidth * 0.8,
+    width: '80%',  // CSS percentage instead of JavaScript calculation
+    maxWidth: 360, // Prevent overly wide drawers
+    minWidth: 280, // Ensure usable width on small screens
     backgroundColor: theme.colors.surface,
     shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 2, height: 0 },
@@ -362,6 +364,7 @@ export const createStyles = (theme, insets, screenWidth) => ({
     borderBottomWidth: 2,
     borderBottomColor: theme.colors.accent,
     backgroundColor: theme.colors.surface,
+    color: theme.colors.textPrimary,
   },
   projectList: {
     maxHeight: 350,

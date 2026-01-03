@@ -36,23 +36,13 @@ const MessageDebugModal = ({
   const [expandedGroups, setExpandedGroups] = useState({});
   const [activeTab, setActiveTab] = useState("classified");
 
-  // Resizable drawer state
+  // Resizable drawer state - using Dimensions.get for modal calculations
   const screenHeight = Dimensions.get("window").height;
-  const [screenWidth, setScreenWidth] = useState(
-    Dimensions.get("window").width,
-  );
+  const screenWidth = Dimensions.get("window").width;
   const [drawerHeight, setDrawerHeight] = useState(screenHeight * 0.6); // Start at 60%
   const [isResizing, setIsResizing] = useState(false);
   const lastGestureY = useRef(0);
   const animatedHeight = useRef(new Animated.Value(screenHeight * 0.6)).current;
-
-  // Screen width detection for wide screen behavior
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      setScreenWidth(window.width);
-    });
-    return () => subscription?.remove();
-  }, []);
 
   const isWideScreen = screenWidth >= 768;
 

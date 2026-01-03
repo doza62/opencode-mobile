@@ -123,7 +123,7 @@ export const applyConfigPreset = (presetName) => {
     return NORMALIZATION_CONFIG;
   }
 
-  Object.assign(NORMALIZATION_CONFIG, preset);
+   NORMALIZATION_CONFIG = { ...NORMALIZATION_CONFIG, ...preset };
   console.debug(`⚙️ Applied normalization config preset: ${presetName}`);
   return { ...NORMALIZATION_CONFIG };
 };
@@ -134,7 +134,7 @@ export const applyConfigPreset = (presetName) => {
  * @returns {Object} - Updated configuration
  */
 export const updateConfig = (updates) => {
-  Object.assign(NORMALIZATION_CONFIG, updates);
+   NORMALIZATION_CONFIG = { ...NORMALIZATION_CONFIG, ...updates };
   console.debug('⚙️ Updated normalization config:', updates);
   return { ...NORMALIZATION_CONFIG };
 };

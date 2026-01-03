@@ -1,18 +1,16 @@
 // hooks.js - Custom hooks for session drawer
 import { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
-import { Dimensions } from 'react-native';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-// Gesture constants
+// Gesture constants - fixed values for reliability
 const EDGE_ZONE_WIDTH = 20; // px from left edge
-const GESTURE_THRESHOLD = screenWidth * 0.25; // 25% of screen width
+const GESTURE_THRESHOLD = 80; // Fixed threshold based on 320px drawer
 const VELOCITY_THRESHOLD = 400; // points per second
+const DRAWER_WIDTH = 320; // Fixed drawer width
 
 export const useDrawerAnimation = (isPersistent, onClose) => {
-  console.debug('useDrawerAnimation called:', { isPersistent, screenWidth });
-  const initialTranslateX = isPersistent ? 0 : -screenWidth * 0.8;
+  console.debug('useDrawerAnimation called:', { isPersistent });
+  const initialTranslateX = isPersistent ? 0 : -DRAWER_WIDTH;
   console.debug('Initial translateX:', initialTranslateX);
 
   const translateX = useSharedValue(initialTranslateX);
@@ -27,7 +25,7 @@ export const useDrawerAnimation = (isPersistent, onClose) => {
   };
 
   const closeDrawer = () => {
-    const closePosition = -screenWidth * 0.8;
+    const closePosition = -DRAWER_WIDTH;
     console.debug('closeDrawer called, setting translateX to', closePosition);
     translateX.value = withTiming(closePosition, { duration: 300 }, (finished) => {
       if (finished && onClose) {
@@ -42,7 +40,7 @@ export const useDrawerAnimation = (isPersistent, onClose) => {
       if (!isPersistent) {
         // Only respond to horizontal gestures
         if (Math.abs(event.translationX) > Math.abs(event.translationY)) {
-          const clampedX = Math.max(-screenWidth * 0.8, Math.min(0, event.translationX));
+          const clampedX = Math.max(-DRAWER_WIDTH, Math.min(0, event.translationX));
           translateX.value = clampedX;
         }
       }
@@ -55,13 +53,13 @@ export const useDrawerAnimation = (isPersistent, onClose) => {
 
         if (shouldOpen && translateX.value < 0) {
           openDrawer();
-        } else if (shouldClose && translateX.value > -screenWidth * 0.8) {
+        } else if (shouldClose && translateX.value > -DRAWER_WIDTH) {
           closeDrawer();
         } else {
           // Snap to nearest state
           const snapToOpen = Math.abs(translationX) < GESTURE_THRESHOLD;
           translateX.value = withTiming(
-            snapToOpen ? 0 : -screenWidth * 0.8,
+            snapToOpen ? 0 : -DRAWER_WIDTH,
             { duration: 200 }
           );
         }

@@ -25,7 +25,7 @@ export const MESSAGE_SCHEMAS = {
 /**
  * Configuration for different normalization strategies
  */
-export const NORMALIZATION_CONFIG = {
+export let NORMALIZATION_CONFIG = {
   // Enable/disable features
   enableValidation: true,
   enableMetrics: true,
