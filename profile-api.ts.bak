@@ -1,0 +1,82 @@
+import type { Plugin } from "@opencode-ai/plugin";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
+const API_PORT = 4099;
+const SCRIPT_PATH = `${process.env.HOME}/.config/opencode/scripts/swap-profile.sh`;
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+async function runScript(
+  command: string,
+): Promise<{ success: boolean; output: string; error?: string }> {
+  try {
+    const { stdout, stderr } = await execAsync(`${SCRIPT_PATH} ${command}`);
+    return {
+      success: true,
+      output: stdout.trim(),
+      error: stderr || undefined,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      output: "",
+      error: error.message,
+    };
+  }
+}
+
+export const ProfileApiPlugin: Plugin = async (ctx) => {
+  console.log("[ProfileAPI] Starting on port", API_PORT);
+
+  Bun.serve({
+    port: API_PORT,
+    hostname: "0.0.0.0",
+    async fetch(req) {
+      const url = new URL(req.url);
+
+      if (req.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: cors });
+      }
+
+      if (url.pathname === "/profile/current" && req.method === "GET") {
+        const result = await runScript("current");
+        return Response.json({ profile: result.output }, { headers: cors });
+      }
+
+      if (url.pathname === "/profile/list" && req.method === "GET") {
+        const result = await runScript("list");
+        return Response.json({ output: result.output }, { headers: cors });
+      }
+
+      if (url.pathname === "/profile/toggle" && req.method === "POST") {
+        const result = await runScript("toggle");
+        return Response.json(result, { headers: cors });
+      }
+
+      if (
+        url.pathname.startsWith("/profile/switch/") &&
+        req.method === "POST"
+      ) {
+        const profileName = url.pathname.split("/").pop();
+        const result = await runScript(`switch ${profileName}`);
+        return Response.json(result, { headers: cors });
+      }
+
+      return new Response("Not Found", { status: 404, headers: cors });
+    },
+  });
+
+  console.log("[ProfileAPI] API running on http://0.0.0.0:4099");
+
+  return {
+    event: async ({ event }) => {},
+  };
+};
+
+export default ProfileApiPlugin;
