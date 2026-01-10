@@ -2,6 +2,9 @@
  * Message ID generator for React keys and message identification
  * Provides unique, stable IDs for messages
  */
+import { logger } from '@/shared/services/logger';
+
+const messageLogger = logger.tag('Message');
 
 let messageCounter = 0;
 const usedIds = new Set();
@@ -73,7 +76,7 @@ export const generateContentBasedId = (message) => {
     return hashedId;
 
   } catch (error) {
-    console.warn('Failed to generate content-based ID, using fallback:', error);
+    messageLogger.warn('Failed to generate content-based ID, using fallback', error);
     return generateMessageId();
   }
 };

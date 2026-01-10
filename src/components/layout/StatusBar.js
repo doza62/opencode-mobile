@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, memo } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Animated,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { getProjectDisplayName } from "@/shared";
 import { useTheme } from "@/shared/components/ThemeProvider";
 import { SessionBusyIndicator } from "@/features/sessions/components";
@@ -59,7 +58,7 @@ const StatusBar = ({
   isWideScreen,
 }) => {
   const theme = useTheme();
-  const styles = getStyles(theme);
+  const styles = getStyles(theme, isWideScreen);
 
   const { showConnectedText } = useConnectionStatusDisplay(isConnected);
   const {
@@ -130,13 +129,16 @@ const StatusBar = ({
               >
                 {titleText}
               </Text>
+              {selectedSession?.description && (
+                <Text
+                  style={styles.descriptionText}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {selectedSession.description}
+                </Text>
+              )}
             </Animated.View>
-            <LinearGradient
-              colors={['transparent', theme.colors.surface]}
-              start={{ x: 0.7, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.fadeGradient}
-            />
           </TouchableOpacity>
         </View>
 
@@ -203,7 +205,7 @@ const StatusBar = ({
        </Modal> */}
       <SessionDropdown
         visible={dropdownVisible}
-        onClose={() => setDropdownVisible(false)}
+        onClose={toggleDropdown}
         projectSessions={projectSessions}
         selectedSession={selectedSession}
         onSessionSelect={handleSessionSelect}
@@ -215,14 +217,14 @@ const StatusBar = ({
   );
 };
 
-const getStyles = (theme) =>
+const getStyles = (theme, isWideScreen) =>
   StyleSheet.create({
     statusBar: {
       backgroundColor: theme.colors.background,
-      paddingTop: "8",
-      paddingBottom: "8",
-      paddingLeft: "16",
-      paddingRight: "16",
+      paddingTop: 8,
+      paddingBottom: 8,
+      paddingLeft: 16,
+      paddingRight: 16,
       flexDirection: "column",
       alignItems: "stretch",
       borderBottomWidth: 1,
@@ -269,7 +271,7 @@ const getStyles = (theme) =>
     },
     appTitle: {
       color: theme.colors.textPrimary,
-      fontSize: "20",
+      fontSize: 20,
       fontWeight: "bold",
     },
     statusContainer: {
@@ -299,10 +301,6 @@ const getStyles = (theme) =>
     loadingIndicator: {
       marginLeft: 8,
     },
-    menuButton: {
-      padding: 8,
-      marginRight: 8,
-    },
     titleContainer: {
       position: "relative",
       flex: 1,
@@ -310,17 +308,14 @@ const getStyles = (theme) =>
       overflow: "hidden",
     },
     titleText: {
-      fontSize: 13,
+      fontSize: isWideScreen ? 14 : 16,
       fontWeight: "600",
       color: theme.colors.textPrimary,
       marginBottom: 2,
     },
-    fadeGradient: {
-      position: "absolute",
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: 30,
+    descriptionText: {
+      fontSize: isWideScreen ? 11 : 13,
+      color: theme.colors.textSecondary,
     },
     dropdownArrow: {
       marginLeft: 4,
@@ -421,4 +416,4 @@ const getStyles = (theme) =>
     },
   });
 
-export default StatusBar;
+export default memo(StatusBar);

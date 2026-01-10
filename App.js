@@ -14,8 +14,12 @@ import {
 import ChatScreen from './src/ChatScreen';
 import { useSSEOrchestrator as useSSE } from './src/features/connection/hooks/useSSEOrchestrator';
 import { ThemeProvider, useTheme } from './src/shared/components/ThemeProvider';
-import { SplashScreen } from './src/components/common';
+import { SplashScreen, AppErrorBoundary } from './src/components/common';
 import { DEBUG } from './src/shared/constants';
+import { logger } from '@/shared/services/logger';
+
+// Force DEBUG logging
+logger.setLevel('DEBUG');
 
 if (!DEBUG) {
   console.debug = () => {};
@@ -95,7 +99,9 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <AppContent fontsLoaded={fontsLoaded} onLayoutRootView={onLayoutRootView} />
+      <AppErrorBoundary>
+        <AppContent fontsLoaded={fontsLoaded} onLayoutRootView={onLayoutRootView} />
+      </AppErrorBoundary>
     </ThemeProvider>
   );
 }

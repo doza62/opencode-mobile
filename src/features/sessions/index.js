@@ -1,8 +1,6 @@
-// Sessions feature exports
 export {
   sendMessageToSession,
-  clearSession,
-  hasActiveSession,
-  setCurrentSession,
-  deleteSession
+  deleteSession,
+  createSession,
+  getSessionMessages,
 } from './services/sessionService';

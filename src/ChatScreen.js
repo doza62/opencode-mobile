@@ -1,6 +1,7 @@
- import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Animated, useWindowDimensions, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { logger } from '@/shared/services/logger';
 
 import StatusBar from '@/components/layout/StatusBar';
 import SendIcon from '@/components/common/PaperPlaneIcon';
@@ -74,14 +75,14 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
 
 
      // Handle auto-connect project selector trigger
-     const { shouldShowProjectSelector } = props;
-     useEffect(() => {
-       console.debug('ChatScreen: shouldShowProjectSelector changed to:', shouldShowProjectSelector);
-       if (shouldShowProjectSelector) {
-         console.debug('ChatScreen: Setting showEmbeddedSelector to true');
-         setShowEmbeddedSelector(true);
-       }
-      }, [shouldShowProjectSelector]);
+      const { shouldShowProjectSelector } = props;
+      useEffect(() => {
+        const chatLogger = logger.tag('ChatScreen');
+        if (shouldShowProjectSelector) {
+          chatLogger.debug('shouldShowProjectSelector changed to true, showing embedded selector');
+          setShowEmbeddedSelector(true);
+        }
+       }, [shouldShowProjectSelector]);
 
 
       const {
@@ -300,14 +301,14 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
               isWideScreen={isWideScreen}
             />
            {showInfoBar && (
-              <ConnectionStatusBar
+               <ConnectionStatusBar
                 isConnected={isConnected}
                 isConnecting={isConnecting}
                 onReconnect={() => connect(inputUrl, { forceReconnect: true })}
                 onDisconnect={disconnectFromEvents}
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}
-                serverUrl={inputUrl}
+                serverUrl={baseUrl}
                 providers={providers}
                 selectedModel={selectedModel}
                 onModelSelect={onModelSelect}
@@ -351,7 +352,7 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
                       onClearError={clearError}
                       allUnclassifiedMessages={groupedUnclassifiedMessages}
                       isThinking={isSessionBusy}
-                      allMessages={groupedUnclassifiedMessages}
+                      allMessages={groupedAllMessages}
                     />
                 </Animated.View>
                 <Animated.View

@@ -1,6 +1,9 @@
 // App lifecycle and notification management
 import { useState, useEffect } from 'react';
 import { AppState } from 'react-native';
+import { logger } from '@/shared/services/logger';
+
+const appLogger = logger.tag('AppState');
 
 export const useAppState = (selectedSession) => {
   const [appState, setAppState] = useState(AppState.currentState);
@@ -9,10 +12,8 @@ export const useAppState = (selectedSession) => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       setAppState(nextAppState);
 
-      // Handle app state changes for notifications
       if (nextAppState === 'inactive' && selectedSession) {
-        // Could trigger notifications here
-        console.debug('App going inactive with active session');
+        appLogger.debug('App going inactive with active session');
       }
     });
 

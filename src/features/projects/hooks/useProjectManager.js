@@ -1,7 +1,11 @@
 // Project and session management
 import { useState, useCallback, useEffect } from "react";
-import { apiClient } from "@/services/api/client";
+import { apiClient } from "@/shared/services/api/client";
 import { storage } from "@/shared/services/storage";
+import { logger } from "@/shared/services/logger";
+
+const projectLogger = logger.tag('Project');
+const sessionLogger = logger.tag('Session');
 
 export const useProjectManager = (baseUrl) => {
   const [projects, setProjects] = useState([]);
@@ -12,143 +16,127 @@ export const useProjectManager = (baseUrl) => {
   const [loading, setLoading] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
 
-  // Auto-load projects when baseUrl is set
+  const refreshProjectSessions = useCallback(
+     async (project = selectedProject) => {
+       if (!baseUrl || !project?.id) {
+         return;
+       }
+
+       try {
+         projectLogger.debug('Refreshing project sessions and statuses', { projectId: project.id });
+
+         // Fetch sessions (already filtered by project via header)
+         const sessionResponse = await apiClient.get(
+           `${baseUrl}/session`,
+           {},
+           project,
+         );
+         const projectSessions = await apiClient.parseJSON(sessionResponse);
+         const validSessions = projectSessions.filter(session =>
+           session &&
+           typeof session === 'object' &&
+           session.id &&
+           typeof session.id === 'string'
+         );
+         projectLogger.debug('Project sessions fetched', {
+           count: validSessions.length,
+           projectId: project.id
+         });
+         setProjectSessions(validSessions);
+
+         // Fetch statuses
+         const statusResponse = await apiClient.get(
+           `${baseUrl}/session/status`,
+           {},
+           project,
+         );
+         const statuses = await apiClient.parseJSON(statusResponse);
+         sessionLogger.debug('Session statuses fetched', { count: Object.keys(statuses || {}).length });
+         setSessionStatuses(statuses || {});
+       } catch (error) {
+         projectLogger.error('Failed to refresh project sessions', error);
+         setProjectSessions([]);
+         setSessionStatuses({});
+       }
+     },
+    [baseUrl, selectedProject],
+  );
+
+  const loadProjects = useCallback(async () => {
+     if (!baseUrl) return;
+
+     setLoading(true);
+     try {
+       projectLogger.debug('Loading projects', { url: `${baseUrl}/project` });
+       const response = await apiClient.get(`${baseUrl}/project`);
+       const data = await apiClient.parseJSON(response);
+       const projectsData = data.projects || data;
+       const newProjects = Array.isArray(projectsData) ? projectsData : [];
+       setProjects(newProjects);
+       projectLogger.debug('Projects loaded', { count: newProjects.length });
+     } catch (error) {
+       projectLogger.error('Failed to load projects', error);
+       setProjects([]);
+     } finally {
+       setLoading(false);
+     }
+   }, [baseUrl]);
+
   useEffect(() => {
     if (baseUrl) {
       loadProjects();
     }
-  }, [baseUrl]);
+  }, [baseUrl, loadProjects]);
 
-  // Auto-load sessions when baseUrl and selectedProject are available
   useEffect(() => {
     if (baseUrl && selectedProject) {
       refreshProjectSessions();
     }
-  }, [baseUrl, selectedProject]);
+  }, [baseUrl, selectedProject, refreshProjectSessions]);
 
-  // Unified refresh function for sessions and statuses
-  const refreshProjectSessions = useCallback(
-    async (project = selectedProject) => {
-      if (!baseUrl || !project?.id) {
-        return;
-      }
-
-      try {
-        console.debug(
-          "Refreshing project sessions and statuses for project:",
-          project.id,
-        );
-
-        // Fetch sessions (already filtered by project via header)
-        const sessionResponse = await apiClient.get(
-          `${baseUrl}/session`,
-          {},
-          project,
-        );
-        const projectSessions = await apiClient.parseJSON(sessionResponse);
-        const validSessions = projectSessions.filter(session =>
-          session &&
-          typeof session === 'object' &&
-          session.id &&
-          typeof session.id === 'string'
-        );
-        console.debug(
-          "Project sessions fetched:",
-          validSessions.length,
-          "valid sessions for project",
-          project.id,
-        );
-        setProjectSessions(validSessions);
-
-        // Fetch statuses
-        const statusResponse = await apiClient.get(
-          `${baseUrl}/session/status`,
-          {},
-          project,
-        );
-        const statuses = await apiClient.parseJSON(statusResponse);
-        console.debug("Session statuses:", statuses);
-        setSessionStatuses(statuses || {});
-      } catch (error) {
-        console.error("Failed to refresh project sessions:", error);
-        setProjectSessions([]);
-        setSessionStatuses({});
-      }
-    },
-    [baseUrl, selectedProject],
-  );
-
-  // Load all projects
-  const loadProjects = useCallback(async () => {
-    if (!baseUrl) return;
-
-    setLoading(true);
-    try {
-      console.debug("Loading projects from:", `${baseUrl}/project`);
-      const response = await apiClient.get(`${baseUrl}/project`);
-      const data = await apiClient.parseJSON(response);
-      const projectsData = data.projects || data;
-      const newProjects = Array.isArray(projectsData) ? projectsData : [];
-      setProjects(newProjects);
-      console.debug("Projects set to:", newProjects);
-      // Force a check
-      setTimeout(
-        () => { console.debug("After setTimeout, projects state:", projects); },
-        0,
-      );
-    } catch (error) {
-      console.error("Failed to load projects:", error);
-      setProjects([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [baseUrl]);
-
-  // Select a project and load its sessions
   const selectProject = useCallback(
     async (project) => {
       setSessionLoading(true);
       setSelectedProject(project);
-      setSelectedSession(null); // Clear session selection
+      setSelectedSession(null);
 
-      // Save selected project
       if (project) {
         await storage.set("lastSelectedProject", project);
       } else {
         await storage.remove("lastSelectedProject");
-        await storage.remove("lastSelectedSession"); // Clear session if project cleared
+        await storage.remove("lastSelectedSession");
       }
 
-       if (project) {
-         setLoading(true);
-         try {
-           if (baseUrl) {
-             await refreshProjectSessions(project);
-           }
-         } catch (error) {
-           console.error("Failed to load project sessions:", error);
-           setProjectSessions([]);
-           setSessionStatuses({});
-         } finally {
-           setLoading(false);
-         }
-       } else {
+      if (project) {
+        setLoading(true);
+        try {
+          if (baseUrl) {
+            await refreshProjectSessions(project);
+          }
+        } catch (error) {
+          projectLogger.error('Failed to load project sessions', error);
+          setProjectSessions([]);
+          setSessionStatuses({});
+        } finally {
+          setLoading(false);
+        }
+      } else {
         setProjectSessions([]);
         setSessionStatuses({});
       }
       setSessionLoading(false);
     },
-    [],
+    [baseUrl, refreshProjectSessions],
   );
 
-  // Select a session
-  const selectSession = useCallback(
-    async (session) => {
-      if (session && (!session.id || typeof session.id !== 'string')) {
-        console.warn('Invalid session selected:', session);
-        return;
-      }
-      setSelectedSession(session);
+   // Select a session
+   const selectSession = useCallback(
+     async (session) => {
+       if (session && (!session.id || typeof session.id !== 'string')) {
+         sessionLogger.warn('Invalid session selected', session);
+         return;
+       }
+       setSelectedSession(session);
 
       // Save selected session
       if (session) {
@@ -189,21 +177,19 @@ export const useProjectManager = (baseUrl) => {
       setProjectSessions((prev) => [newSession, ...prev]);
       setSelectedSession(newSession);
 
-      return newSession;
-    } catch (error) {
-      console.error("Failed to create session:", error);
-      throw error;
-    }
-  }, [selectedProject, baseUrl]);
+       return newSession;
+     } catch (error) {
+       projectLogger.error('Failed to create session', error);
+       throw error;
+     }
+   }, [selectedProject, baseUrl]);
 
-  // Delete session
   const deleteSession = useCallback(
     async (sessionId) => {
       if (!baseUrl) {
         throw new Error("No base URL available");
       }
 
-      // Validate sessionId parameter
       if (!sessionId || typeof sessionId !== 'string') {
         throw new Error(`Invalid sessionId: expected string, got ${typeof sessionId}`);
       }
@@ -215,21 +201,19 @@ export const useProjectManager = (baseUrl) => {
           selectedProject,
         );
 
-        // Remove from project sessions
         setProjectSessions((prev) =>
           prev.filter((session) => session.id !== sessionId),
         );
 
-        // Clear selection if deleted session was selected
         if (selectedSession && selectedSession.id === sessionId) {
           setSelectedSession(null);
         }
       } catch (error) {
-        console.error("Failed to delete session:", error);
+        projectLogger.error('Failed to delete session', error);
         throw error;
       }
     },
-    [baseUrl, selectedSession],
+    [baseUrl, selectedProject, selectedSession],
   );
 
   return {

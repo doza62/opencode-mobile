@@ -2,6 +2,9 @@
  * Request utilities for opencode mobile app
  * Handles common headers and project path management
  */
+import { logger } from '@/shared/services/logger';
+
+const apiLogger = logger.tag('API');
 
 /**
  * Get the full project path for x-opencode-directory header
@@ -9,15 +12,13 @@
  * @returns {string} - Full project directory path
  */
 export const getProjectPath = (selectedProject = null) => {
-  // Use selected project's directory/worktree path
   if (selectedProject && selectedProject.worktree) {
     return selectedProject.worktree;
   }
   if (selectedProject && selectedProject.directory) {
     return selectedProject.directory;
   }
-  // No valid path found - log warning and return empty
-  console.warn('getProjectPath: No worktree or directory found for project', selectedProject?.id, '- server will return all sessions');
+  apiLogger.warn('No worktree or directory found for project', { projectId: selectedProject?.id });
   return '';
 };
 

@@ -1,13 +1,16 @@
-// Input validation helpers
-import { validateUrl as originalValidateUrl } from './urlValidation';
-
 /**
- * Enhanced URL validation with additional checks
- * @param {string} url - URL to validate
- * @returns {boolean} - True if valid
+ * Validates if a URL is a valid HTTP or HTTPS URL
+ * @param {string} url - The URL to validate
+ * @returns {boolean} - True if valid, false otherwise
  */
 export const validateUrl = (url) => {
-  return originalValidateUrl(url);
+  if (!url || !url.trim()) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (e) {
+    return false;
+  }
 };
 
 /**

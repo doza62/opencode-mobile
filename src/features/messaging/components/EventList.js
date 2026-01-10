@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, memo, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,18 @@ import {
   ScrollView,
   TouchableOpacity,
   Keyboard,
+  TouchableWithoutFeedback,
+  Clipboard,
+  Animated,
+  AccessibilityInfo,
 } from "react-native";
+import { __DEV__ } from 'react-native';
 import Markdown from "react-native-markdown-display";
 import { useTheme } from "@/shared/components/ThemeProvider";
 import { ThinkingIndicator } from "@/shared/components/common";
+import { logger } from "@/shared/services/logger";
+
+const messageLogger = logger.tag('Message');
 
 const getMarkdownStyles = (theme) => {
   return {
@@ -97,12 +105,34 @@ const EventList = ({
   onDebugPress,
 }) => {
   const theme = useTheme();
-  const markdownStyles = getMarkdownStyles(theme);
-  const styles = getStyles(theme);
+  const markdownStyles = useMemo(() => getMarkdownStyles(theme), [theme]);
+  const styles = useMemo(() => getStyles(theme), [theme]);
   const [debugVisible, setDebugVisible] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
   const previousEventsLength = useRef(0);
+
+  // Show toast with fade animation
+  const showToast = () => {
+    setToastVisible(true);
+    Animated.timing(toastOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setTimeout(() => {
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+          setToastVisible(false);
+        });
+      }, 1500);
+    });
+  };
 
   const hasUnclassifiedMessages =
     groupedUnclassifiedMessages &&
@@ -157,6 +187,33 @@ const EventList = ({
       return null;
     }
 
+    const handleCopy = async () => {
+      let content = "";
+      if (typeof item.message === "string") {
+        content = item.message;
+      } else if (
+        item.displayMessage &&
+        typeof item.displayMessage === "string"
+      ) {
+        content = item.displayMessage;
+      } else {
+        content = JSON.stringify(
+          item.message || item.payload || item,
+          null,
+          2,
+        );
+      }
+
+      await Clipboard.setString(content);
+    };
+
+    // Handle long press for copy
+    const handleLongPress = () => {
+      AccessibilityInfo.announceForAccessibility('Copied to clipboard');
+      handleCopy();
+      showToast();
+    };
+
     let itemStyle, typeStyle, messageStyle, containerStyle;
 
     // Determine styling based on message type
@@ -208,13 +265,28 @@ const EventList = ({
       },
     };
 
+    const debugId = item.messageId 
+      ? `${item.messageId.slice(-8)}` 
+      : item.id?.slice(-8) || 'no-id';
+
     return (
       <View
-        key={item.id}
+        key={item.messageId || item.id}
         style={[styles.eventContainer, containerStyle]}
         pointerEvents="box-none"
       >
-        <View style={[styles.eventItem, itemStyle]} pointerEvents="box-none">
+        <TouchableOpacity
+          style={[styles.eventItem, itemStyle]}
+          onLongPress={handleLongPress}
+          activeOpacity={0.7}
+          accessibilityLabel="Message. Long press to copy"
+          accessibilityRole="button"
+        >
+          {__DEV__ && (
+            <View style={styles.headerRow}>
+              <Text style={styles.debugIdBadge}>{debugId} | {item.type} | {item.role || 'no-role'}</Text>
+            </View>
+          )}
           <View
             style={[styles.markdownContainer, messageStyle]}
             pointerEvents="box-none"
@@ -325,17 +397,16 @@ const EventList = ({
                   }
                   return content || "No content available";
                 } catch (error) {
-                  console.error(
-                    "Error rendering message content:",
-                    error,
-                    item,
-                  );
+                  messageLogger.error('Failed to render message content', {
+                    messageId: item?.id,
+                    error: error.message,
+                  });
                   return `Error rendering message: ${error.message}`;
                 }
               })()}
             </Markdown>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -349,16 +420,19 @@ const EventList = ({
         </TouchableOpacity>
       )}
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.listContent}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {events.map((item) => renderEventItem({ item }))}
-        {isThinking && <ThinkingIndicator isThinking={true} inline={true} />}
-      </ScrollView>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.listContent}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+        >
+          {events.map((item) => renderEventItem({ item }))}
+          {isThinking && <ThinkingIndicator isThinking={true} inline={true} />}
+        </ScrollView>
+      </TouchableWithoutFeedback>
 
       {!isAtBottom && (
         <TouchableOpacity
@@ -367,6 +441,18 @@ const EventList = ({
         >
           <Text style={styles.scrollToBottomText}>↓</Text>
         </TouchableOpacity>
+      )}
+
+      {/* Copy toast notification */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toastContainer,
+            { opacity: toastOpacity },
+          ]}
+        >
+          <Text style={styles.toastText}>✓ Copied!</Text>
+        </Animated.View>
       )}
     </View>
   );
@@ -593,6 +679,53 @@ const getStyles = (theme) =>
       fontSize: 20,
       fontWeight: "bold",
     },
+    debugIdBadge: {
+      fontSize: 9,
+      fontFamily: "monospace",
+      color: theme.colors.textSecondary,
+      backgroundColor: theme.colors.surfaceSecondary,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginBottom: 4,
+      alignSelf: "flex-start",
+      flex: 1,
+    },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    copyButton: {
+      padding: 4,
+      borderRadius: 4,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+    copyButtonText: {
+      fontSize: 16,
+    },
+    toastContainer: {
+      position: 'absolute',
+      bottom: 80,
+      left: '50%',
+      transform: [{ translateX: -60 }],
+      backgroundColor: theme.colors.success || '#28a745',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 20,
+      elevation: 5,
+      shadowColor: theme.colors.shadowColor,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      zIndex: 1000,
+    },
+    toastText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '600',
+    },
   });
 
-export default EventList;
+export default memo(EventList);

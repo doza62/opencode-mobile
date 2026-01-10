@@ -3,6 +3,9 @@ import * as Device from 'expo-device';
 import { Platform, AppState } from 'react-native';
 import { storage } from '@/shared/services/storage';
 import { STORAGE_KEYS } from '@/shared/constants/storage';
+import { logger } from '@/shared/services/logger';
+
+const notificationLogger = logger.tag('Notifications');
 
 class NotificationService {
   constructor() {
@@ -11,7 +14,7 @@ class NotificationService {
 
   async initialize() {
     if (!Device.isDevice) {
-      console.debug('[Notifications] Not available on simulator');
+      notificationLogger.debug('Not available on simulator');
       this.isInitialized = false;
       return;
     }
@@ -40,7 +43,7 @@ class NotificationService {
     }
 
     if (finalStatus !== 'granted') {
-      console.debug('[Notifications] Permission not granted');
+      notificationLogger.debug('Permission not granted');
       this.isInitialized = false;
       return;
     }
@@ -55,12 +58,12 @@ class NotificationService {
     });
 
     this.isInitialized = true;
-    console.debug('[Notifications] Initialized successfully');
+    notificationLogger.debug('Initialized successfully');
   }
 
   async scheduleNotification(title, body, data = {}) {
     if (!this.isInitialized) {
-      console.debug('[Notifications] Not initialized, skipping:', { title, body });
+      notificationLogger.debug('Not initialized, skipping notification', { title, body });
       return;
     }
 
@@ -70,10 +73,10 @@ class NotificationService {
         return;
       }
     } catch (error) {
-      console.error('[Notifications] Failed to check settings:', error);
+      notificationLogger.error('Failed to check notification settings', error);
     }
 
-    console.debug('[Notifications] Scheduling:', { title, body });
+    notificationLogger.debug('Scheduling notification', { title, body });
 
     await Notifications.scheduleNotificationAsync({
       content: {

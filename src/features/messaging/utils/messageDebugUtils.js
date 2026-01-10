@@ -5,37 +5,33 @@
 
 import { classifyMessage } from '../utils/messageClassifier';
 import { normalizeLoadedMessage } from '../utils/messageNormalizer';
+import { logger } from '@/shared/services/logger';
+
+const debugLogger = logger.tag('Debug');
 
 // Test message classification
 window.debugMessageClassification = (testMessage) => {
-  console.group('🔍 Message Classification Debug');
-
   try {
     const result = classifyMessage(testMessage);
+    debugLogger.debug('Message classification debug result', result);
   } catch (error) {
-    console.error('Classification failed:', error);
+    debugLogger.error('Classification failed', error);
   }
-
-  console.groupEnd();
 };
 
 // Test message normalization
 window.debugMessageNormalization = (testMessage) => {
-  console.group('🔄 Message Normalization Debug');
-
   try {
     const result = normalizeLoadedMessage(testMessage);
+    debugLogger.debug('Message normalization debug result', result);
   } catch (error) {
-    console.error('Normalization failed:', error);
+    debugLogger.error('Normalization failed', error);
   }
-
-  console.groupEnd();
 };
 
 // Test with sample messages
 window.debugSampleMessages = () => {
   const samples = [
-    // SSE-style message
     {
       payload: {
         type: 'message.updated',
@@ -45,25 +41,17 @@ window.debugSampleMessages = () => {
         }
       }
     },
-
-    // Flat loaded message
     {
       type: 'message.loaded',
       info: { summary: { body: 'Loaded message' } },
       sessionId: 'test-session'
     },
-
-    // Empty message
     {},
-
-    // Invalid message
     null
   ];
 
   samples.forEach((sample, index) => {
-    console.group(`📝 Sample ${index + 1}`);
-    window.debugMessageClassification(sample);
-    window.debugMessageNormalization(sample);
-    console.groupEnd();
+    debugLogger.debug(`Sample ${index + 1} classification`, classifyMessage(sample));
+    debugLogger.debug(`Sample ${index + 1} normalization`, normalizeLoadedMessage(sample));
   });
 };

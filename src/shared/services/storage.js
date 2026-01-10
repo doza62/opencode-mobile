@@ -1,5 +1,8 @@
 // AsyncStorage wrapper with error handling and type safety
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '@/shared/services/logger';
+
+const storageLogger = logger.tag('Storage');
 
 /**
  * Storage service for persistent data
@@ -15,7 +18,7 @@ export const storage = {
       const value = await AsyncStorage.getItem(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
-      console.error(`Storage get error for ${key}:`, error);
+      storageLogger.error('Storage get error', { key, error: error.message });
       return null;
     }
   },
@@ -30,7 +33,7 @@ export const storage = {
     try {
       await AsyncStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
-      console.error(`Storage set error for ${key}:`, error);
+      storageLogger.error('Storage set error', { key, error: error.message });
       throw error;
     }
   },
@@ -44,7 +47,7 @@ export const storage = {
     try {
       await AsyncStorage.removeItem(key);
     } catch (error) {
-      console.error(`Storage remove error for ${key}:`, error);
+      storageLogger.error('Storage remove error', { key, error: error.message });
       throw error;
     }
   },
@@ -57,7 +60,7 @@ export const storage = {
     try {
       await AsyncStorage.clear();
     } catch (error) {
-      console.error('Storage clear error:', error);
+      storageLogger.error('Storage clear error', error);
       throw error;
     }
   },
@@ -70,7 +73,7 @@ export const storage = {
     try {
       return await AsyncStorage.getAllKeys();
     } catch (error) {
-      console.error('Storage getAllKeys error:', error);
+      storageLogger.error('Storage getAllKeys error', error);
       return [];
     }
   },
@@ -84,7 +87,7 @@ export const storage = {
     try {
       return await AsyncStorage.multiGet(keys);
     } catch (error) {
-      console.error('Storage multiGet error:', error);
+      storageLogger.error('Storage multiGet error', error);
       return [];
     }
   },
@@ -99,7 +102,7 @@ export const storage = {
       const stringPairs = keyValuePairs.map(([key, value]) => [key, JSON.stringify(value)]);
       await AsyncStorage.multiSet(stringPairs);
     } catch (error) {
-      console.error('Storage multiSet error:', error);
+      storageLogger.error('Storage multiSet error', error);
       throw error;
     }
   }

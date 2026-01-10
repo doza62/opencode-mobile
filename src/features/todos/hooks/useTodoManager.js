@@ -1,6 +1,9 @@
 // Todo functionality management
 import { useState, useCallback, useEffect } from 'react';
-import { apiClient } from '@/services/api/client';
+import { apiClient } from '@/shared/services/api/client';
+import { logger } from '@/shared/services/logger';
+
+const todoLogger = logger.tag('Todo');
 
 export const useTodoManager = (baseUrl, sessionId, selectedProject) => {
   const [todos, setTodos] = useState([]);
@@ -14,7 +17,7 @@ export const useTodoManager = (baseUrl, sessionId, selectedProject) => {
     }
 
     try {
-      console.debug('📋 Loading todos for session:', sessionId);
+      todoLogger.debug('Loading todos for session', { sessionId });
       const response = await apiClient.get(`${baseUrl}/session/${sessionId}/todo`, {}, {}, selectedProject);
       const data = await apiClient.parseJSON(response);
 
@@ -24,7 +27,7 @@ export const useTodoManager = (baseUrl, sessionId, selectedProject) => {
         setTodos([]);
       }
     } catch (error) {
-      console.error('❌ Failed to load todos:', error);
+      todoLogger.error('Failed to load todos', error);
       setTodos([]);
     }
    }, [baseUrl, sessionId, selectedProject]);

@@ -1,5 +1,8 @@
 // SSE (Server-Sent Events) service wrapper
 import EventSource from 'react-native-sse';
+import { logger } from '@/shared/services/logger';
+
+const sseLogger = logger.tag('SSE');
 
 /**
  * SSE service for real-time connections
@@ -15,41 +18,37 @@ export class SSEService {
 
   /**
    * Connect to SSE endpoint
-    * @param {string} url - SSE endpoint URL
-    * @param {Object} options - Connection options
-    * @param {Function} options.heartbeatCallback - Callback to run on heartbeat
-    * @returns {EventSource} - EventSource instance
-    */
-    connect(url, options = {}) {
-      // Close existing connection
-      this.disconnect();
+   * @param {string} url - SSE endpoint URL
+   * @param {Object} options - Connection options
+   * @param {Function} options.heartbeatCallback - Callback to run on heartbeat
+   * @returns {EventSource} - EventSource instance
+   */
+  connect(url, options = {}) {
+    this.disconnect();
 
-      console.debug('SSE: Connecting to', url);
+    sseLogger.debug('Connecting to SSE endpoint', { url });
 
-     // Store heartbeat callback
-     this.heartbeatCallback = options.heartbeatCallback || null;
+    this.heartbeatCallback = options.heartbeatCallback || null;
 
-     this.eventSource = new EventSource(url, {
-       headers: {
-         'Accept': 'text/event-stream',
-         'Cache-Control': 'no-cache',
-         ...options.headers
-       }
-     });
+    this.eventSource = new EventSource(url, {
+      headers: {
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        ...options.headers
+      }
+    });
 
-     this.eventSource.addEventListener('open', () => {
-       console.debug('SSE: Connection opened');
-       this.isConnected = true;
-       this.startHeartbeat();
-     });
+    this.eventSource.addEventListener('open', () => {
+      sseLogger.debug('SSE connection opened');
+      this.isConnected = true;
+      this.startHeartbeat();
+    });
 
-
-
-     this.eventSource.addEventListener('error', (event) => {
-       console.error('SSE: Connection error', event);
-       this.isConnected = false;
-       this.scheduleReconnect(url, options);
-     });
+    this.eventSource.addEventListener('error', (event) => {
+      sseLogger.error('SSE connection error', event);
+      this.isConnected = false;
+      this.scheduleReconnect(url, options);
+    });
 
     return this.eventSource;
   }
@@ -57,12 +56,12 @@ export class SSEService {
   /**
    * Disconnect from SSE
    */
-   disconnect() {
-     if (this.eventSource) {
-       console.debug('SSE: Disconnecting');
-       this.eventSource.close();
-       this.eventSource = null;
-     }
+  disconnect() {
+    if (this.eventSource) {
+      sseLogger.debug('Disconnecting from SSE');
+      this.eventSource.close();
+      this.eventSource = null;
+    }
 
     this.isConnected = false;
     this.stopHeartbeat();
@@ -98,25 +97,23 @@ export class SSEService {
   /**
    * Start heartbeat monitoring
    */
-   startHeartbeat() {
-     this.stopHeartbeat();
-      this.heartbeatInterval = setInterval(() => {
-        if (this.eventSource && this.eventSource.readyState !== EventSource.OPEN) {
-          console.debug('SSE: Heartbeat failed, reconnecting...');
-          this.isConnected = false;
-          // The error handler will trigger reconnection
-        } else {
-          // Call heartbeat callback if provided
-          if (this.heartbeatCallback) {
-            try {
-              this.heartbeatCallback();
-            } catch (error) {
-              console.error('SSE: Heartbeat callback error:', error);
-            }
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.eventSource && this.eventSource.readyState !== EventSource.OPEN) {
+        sseLogger.warn('SSE heartbeat failed, reconnecting...');
+        this.isConnected = false;
+      } else {
+        if (this.heartbeatCallback) {
+          try {
+            this.heartbeatCallback();
+          } catch (error) {
+            sseLogger.error('SSE heartbeat callback error', error);
           }
         }
-      }, 30000); // Check every 30 seconds
-   }
+      }
+    }, 30000);
+  }
 
   /**
    * Stop heartbeat monitoring
@@ -136,7 +133,7 @@ export class SSEService {
   scheduleReconnect(url, options) {
     if (this.reconnectTimeout) return;
 
-    console.debug('SSE: Scheduling reconnect in 5 seconds');
+    sseLogger.debug('Scheduling reconnect in 5 seconds');
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect(url, options);

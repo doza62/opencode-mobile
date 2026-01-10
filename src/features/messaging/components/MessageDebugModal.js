@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Modal, Alert, StyleSheet } from 'react-native';
 import { useTheme } from '@/shared/components/ThemeProvider';
 
@@ -13,6 +13,47 @@ import { useResizableDrawer } from '../hooks/useResizableDrawer';
 import GripHandle from './debug/GripHandle';
 import DebugHeader from './debug/DebugHeader';
 import DebugContent from './debug/DebugContent';
+
+/**
+ * Group all messages by messageId for tracking event lifecycle
+ * @param {Object} allMessages - All messages grouped by category
+ * @returns {Object} Messages grouped by messageId
+ */
+const groupMessagesByMessageId = (allMessages) => {
+  const groups = {};
+
+  const extractMessages = (obj) => {
+    if (!obj || typeof obj !== 'object') return [];
+    return Object.values(obj).flat();
+  };
+
+  const classifiedMessages = extractMessages(allMessages.classified);
+  const unclassifiedMessages = extractMessages(allMessages.unclassified || {});
+  const all = [...classifiedMessages, ...unclassifiedMessages];
+
+  all.forEach(msg => {
+    const msgId = msg.messageId ||
+                  msg.rawData?.payload?.properties?.part?.messageID ||
+                  msg.rawData?.payload?.properties?.info?.id ||
+                  'unknown';
+
+    if (!groups[msgId]) {
+      groups[msgId] = [];
+    }
+    groups[msgId].push({
+      ...msg,
+      eventType: msg.payloadType || msg.type,
+      timestamp: msg.timestamp || msg.rawData?.payload?.properties?.part?.time?.start || Date.now()
+    });
+  });
+
+  // Sort events within each group by timestamp
+  Object.keys(groups).forEach(msgId => {
+    groups[msgId].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  });
+
+  return groups;
+};
 
 /**
  * MessageDebugModal component for displaying classified and unclassified messages
@@ -30,7 +71,7 @@ const MessageDebugModal = ({
   events = [],
   visible = false,
   onClose = () => {},
-  onClearMessages, // New optional prop for clear button
+  onClearMessages,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -52,6 +93,11 @@ const MessageDebugModal = ({
   const groupedMessages = allMessages;
   const unclassifiedMessages = groupedUnclassifiedMessages;
 
+  // Group messages by messageId
+  const groupedByMessageId = useMemo(() => {
+    return groupMessagesByMessageId(allMessages);
+  }, [allMessages]);
+
   // Handle clear messages with confirmation
   const handleClearMessages = useCallback(() => {
     if (!onClearMessages) return;
@@ -66,8 +112,8 @@ const MessageDebugModal = ({
           style: 'destructive',
           onPress: () => {
             onClearMessages();
-            resetState(); // Reset expanded groups and other state
-            setActiveTab('classified'); // Reset to default tab
+            resetState();
+            setActiveTab('classified');
             Alert.alert('Cleared', 'All debug messages have been cleared.');
           }
         }
@@ -88,12 +134,14 @@ const MessageDebugModal = ({
           types: Object.keys(unclassifiedMessages || {}).length,
           total: stats.totalUnclassifiedMessages,
         },
+        messageIdGroups: Object.keys(groupedByMessageId || {}).filter(k => k.startsWith('msg_')).length,
       },
       groupedMessages,
       unclassifiedMessages,
+      groupedByMessageId,
     };
     copyToClipboard(JSON.stringify(allData, null, 2), 'All debug data');
-  }, [groupedMessages, unclassifiedMessages, stats, copyToClipboard]);
+  }, [groupedMessages, unclassifiedMessages, groupedByMessageId, stats, copyToClipboard]);
 
   if (!visible) return null;
 
@@ -121,6 +169,7 @@ const MessageDebugModal = ({
           activeTab={activeTab}
           groupedMessages={groupedMessages}
           unclassifiedMessages={unclassifiedMessages}
+          groupedByMessageId={groupedByMessageId}
           expandedGroups={expandedGroups}
           onToggleGroup={toggleGroup}
           onCopyMessage={copyToClipboard}
@@ -158,6 +207,7 @@ const MessageDebugModal = ({
               activeTab={activeTab}
               groupedMessages={groupedMessages}
               unclassifiedMessages={unclassifiedMessages}
+              groupedByMessageId={groupedByMessageId}
               expandedGroups={expandedGroups}
               onToggleGroup={toggleGroup}
               onCopyMessage={copyToClipboard}

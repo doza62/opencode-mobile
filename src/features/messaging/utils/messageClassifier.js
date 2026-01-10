@@ -1,4 +1,7 @@
 import { getProjectDisplayName } from "@/shared/helpers/formatting";
+import { logger } from "@/shared/services/logger";
+
+const messageLogger = logger.tag('Message');
 
 /**
  * Message classification utility for opencode SSE messages
@@ -9,7 +12,7 @@ import { getProjectDisplayName } from "@/shared/helpers/formatting";
 export const classifyMessage = (item, currentMode = "build") => {
   // Validate input structure
   if (!item || typeof item !== "object") {
-    console.warn("⚠️ classifyMessage received invalid input:", item);
+    messageLogger.warn('classifyMessage received invalid input', item);
     return createFallbackMessage(item);
   }
 
@@ -25,6 +28,29 @@ export const classifyMessage = (item, currentMode = "build") => {
     item.payload?.properties?.info?.sessionID ||
     item.payload?.properties?.part?.sessionID || // For message.part.updated
     null;
+
+  if (payloadType === "session.error") {
+    const errorData = item.payload?.properties?.error;
+    const errorMessage = errorData?.data?.message || errorData?.message || "An error occurred";
+    const errorName = errorData?.name || "Error";
+    const statusCode = errorData?.data?.statusCode || null;
+
+    return {
+      type: "error",
+      category: "message",
+      projectName:
+        item.projectName ||
+        getProjectDisplayName(item.directory) ||
+        "Unknown Project",
+      displayMessage: `${errorName}: ${errorMessage}${statusCode ? ` (Status: ${statusCode})` : ''}`,
+      rawData: item,
+      icon: "❌",
+      sessionId: sessionId,
+      payloadType: payloadType,
+      mode: (currentMode !== null ? currentMode : item.info?.mode) || "build",
+      errorData: errorData,
+    };
+  }
 
   // Handle session status messages specially (for thinking indicator)
   if (payloadType === "session.status") {
@@ -46,6 +72,24 @@ export const classifyMessage = (item, currentMode = "build") => {
         mode: (currentMode !== null ? currentMode : item.info?.mode) || "build",
       };
     }
+  }
+
+  if (payloadType === "session.idle") {
+    return {
+      type: "session_status",
+      category: "internal", // Don't show in UI
+      projectName:
+        item.projectName ||
+        getProjectDisplayName(item.directory) ||
+        "Unknown Project",
+      displayMessage: "Session status: idle",
+      rawData: item,
+      icon: "🔄",
+      sessionId: sessionId,
+      payloadType: payloadType,
+      sessionStatus: "idle",
+      mode: (currentMode !== null ? currentMode : item.info?.mode) || "build",
+    };
   }
 
   // Handle loaded messages from API
@@ -77,10 +121,11 @@ export const classifyMessage = (item, currentMode = "build") => {
         sessionId: sessionId,
         payloadType: payloadType,
         messageId: item.payload?.properties?.info?.id || null,
+        role: role,
         mode: (currentMode !== null ? currentMode : item.info?.mode) || "build",
       };
     } catch (error) {
-      console.error("❌ Error processing loaded message:", error);
+      messageLogger.error('Error processing loaded message', error);
       return {
         type: "unclassified",
         category: "unclassified",
@@ -98,22 +143,71 @@ export const classifyMessage = (item, currentMode = "build") => {
     }
   }
 
+  // Handle partial message updates (streaming text/reasoning parts)
+  if (payloadType === "message.part.updated") {
+    const part = item.payload?.properties?.part;
+    const partType = part?.type || "unknown";
+    const partText = part?.text || "";
+    const delta = item.payload?.properties?.delta || "";
+    const messageId = part?.messageID || item.payload?.properties?.info?.id || null;
+    const partId = part?.id || null;
+
+    messageLogger.debugCtx('MESSAGE_PROCESSING', 'Message.part.updated received', {
+      messageId,
+      partId,
+      partType,
+      textLength: partText.length,
+      hasDelta: !!delta
+    });
+
+    return {
+      type: "partial_message",
+      category: "partial", // Special category for accumulating parts
+      partId: partId,
+      messageId: messageId,
+      partType: partType, // 'text' or 'reasoning'
+      text: partText,
+      delta: delta,
+      sessionId: sessionId,
+      payloadType: payloadType,
+      rawData: item,
+      icon: partType === "reasoning" ? "🤔" : "📝",
+      projectName:
+        item.projectName ||
+        getProjectDisplayName(item.directory) ||
+        "Unknown Project",
+      mode: item.info?.mode || item.payload?.properties?.info?.agent || "build",
+    };
+  }
+
   // message.updated events are treated as finalized messages
   if (payloadType === "message.updated") {
-    console.debug("🔄 MESSAGE.UPDATED RECEIVED:", {
+    const messageId = item.payload?.properties?.info?.id || null;
+    const role = item.payload?.properties?.info?.role || null;
+    const agent = item.payload?.properties?.info?.agent || null;
+
+    if (role === 'user' && agent) {
+      messageLogger.debugCtx('MESSAGE_PROCESSING', 'Skipping contradictory message (role=user with agent)', {
+        messageId,
+        agent,
+      });
+      return null;
+    }
+
+    messageLogger.debugCtx('MESSAGE_PROCESSING', 'Message.updated received', {
       sessionId,
       hasSummaryBody: !!summaryBody,
       summaryBodyLength: summaryBody ? summaryBody.length : 0,
-      agent: item.payload?.properties?.info?.agent,
-      messageId: item.payload?.properties?.info?.id,
+      agent,
+      messageId,
+      role,
     });
 
-    // Only finalize if summaryBody is a non-empty string
+    // Try summary.body first
     if (summaryBody && typeof summaryBody === "string" && summaryBody.trim()) {
-      console.debug(
-        "✅ FINALIZING MESSAGE:",
-        summaryBody.substring(0, 100) + "...",
-      );
+      messageLogger.debug('Finalizing message from summary.body', {
+        preview: summaryBody.substring(0, 100) + '...'
+      });
       return {
         type: "message_finalized",
         category: "message",
@@ -126,29 +220,36 @@ export const classifyMessage = (item, currentMode = "build") => {
         icon: "✅",
         sessionId: sessionId,
         payloadType: payloadType,
-        messageId: item.payload?.properties?.info?.id || null,
+        messageId: messageId,
+        role: role,
         mode: item.payload?.properties?.info?.agent || "build",
       };
-    } else {
-      console.debug(
-        "🚫 INCOMPLETE MESSAGE.UPDATE - treating as unclassified (debug only) - raw data:",
-        JSON.stringify(item, null, 2),
-      );
-      return {
-        type: "message_update_incomplete",
-        category: "unclassified", // Show in debug screen only
-        projectName:
-          item.projectName ||
-          getProjectDisplayName(item.directory) ||
-          "Unknown Project",
-        displayMessage: "Incomplete message.update - missing summary body",
-        rawData: item,
-        icon: "🚫",
-        sessionId: sessionId,
-        payloadType: payloadType,
-        mode: item.info?.mode || "build",
-      };
     }
+
+    // Fallback: Mark as needing assembly from parts (will be assembled by useMessageProcessing)
+    messageLogger.debugCtx('MESSAGE_PROCESSING', 'Message.updated without summary.body - will assemble from parts', {
+      messageId,
+      sessionId,
+      role
+    });
+
+    return {
+      type: "message_finalized",
+      category: "message",
+      projectName:
+        item.projectName ||
+        getProjectDisplayName(item.directory) ||
+        "Unknown Project",
+      message: null, // Will be assembled from partial messages
+      rawData: item,
+      icon: "✅",
+      sessionId: sessionId,
+      payloadType: payloadType,
+      messageId: messageId,
+      role: role,
+      assembledFromParts: true, // Flag to trigger assembly in useMessageProcessing
+      mode: item.payload?.properties?.info?.agent || "build",
+    };
   }
 
   // Handle todo update messages
@@ -211,13 +312,14 @@ export const classifyMessage = (item, currentMode = "build") => {
         sessionId: sessionId,
         payloadType: payloadType,
         messageId: item.info?.id || null,
+        role: role,
         mode: item.info?.mode || item.info?.agent || "build",
       };
     }
   }
 
   // EVERYTHING else goes to unclassified (debug screen only)
-  // console.debug('📋 MESSAGE CLASSIFIED AS UNCLASSIFIED:', {
+  // messageLogger.debugCtx('MESSAGE_PROCESSING', 'Message classified as unclassified', {
   //   payloadType,
   //   hasSummaryBody: !!summaryBody,
   //   summaryBodyType: typeof summaryBody,
@@ -294,10 +396,7 @@ export const groupUnclassifiedMessages = (messages) => {
 
   // Handle undefined or non-array input
   if (!Array.isArray(messages)) {
-    console.warn(
-      "⚠️ groupUnclassifiedMessages received non-array input:",
-      messages,
-    );
+    messageLogger.warn('groupUnclassifiedMessages received non-array input', messages);
     return grouped;
   }
 

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Switch, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DarkModeToggle from '@/components/common/DarkModeToggle';
+import { logger } from '@/shared/services/logger';
+
+const settingsLogger = logger.tag('NotificationSettings');
 
 const NotificationSettings = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -19,7 +23,7 @@ const NotificationSettings = () => {
         setSoundEnabled(parsed.soundEnabled ?? true);
       }
     } catch (error) {
-      console.error('Failed to load notification settings:', error);
+      settingsLogger.error('Failed to load notification settings', error);
     }
   };
 
@@ -27,7 +31,7 @@ const NotificationSettings = () => {
     try {
       await AsyncStorage.setItem('notificationSettings', JSON.stringify(settings));
     } catch (error) {
-      console.error('Failed to save notification settings:', error);
+      settingsLogger.error('Failed to save notification settings', error);
     }
   };
 
@@ -54,6 +58,8 @@ const NotificationSettings = () => {
         <Text style={styles.label}>Sound</Text>
         <Switch value={soundEnabled} onValueChange={toggleSound} />
       </View>
+
+      <DarkModeToggle />
     </View>
   );
 };

@@ -5,7 +5,7 @@
 
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiClient } from '@/services/api/client';
+import { apiClient } from '@/shared/services/api/client';
 import { logger } from '@/shared';
 
 /**

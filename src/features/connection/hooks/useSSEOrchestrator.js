@@ -1,20 +1,28 @@
 // SSE orchestrator - combines all feature modules
 import { useState, useCallback, useEffect } from 'react';
-import {
-  useSSEConnection,
-  useConnectionManager,
-  useAppState,
-  useMessageProcessing,
-  useEventManager,
-  useProjectManager,
-  useModelManager,
-  useTodoManager,
-  useNotificationManager
-} from '@/features';
-import { sendMessageToSession, clearSession, hasActiveSession, setCurrentSession, deleteSession } from '@/features';
+
+import { useSSEConnection } from './useSSEConnection';
+import { useConnectionManager } from './useConnectionManager';
+import { useAppState } from './useAppState';
+
+import { useMessageProcessing, useEventManager } from '@/features/messaging';
+import { useProjectManager } from '@/features/projects';
+import { useModelManager } from '@/features/models';
+import { useTodoManager } from '@/features/todos';
+import { useNotificationManager } from '@/features/notifications';
+
+import { sendMessageToSession } from '@/features/sessions/services/sessionService';
+
 import { generateMessageId } from '@/features/messaging/utils/messageIdGenerator';
 import { storage } from '@/shared/services/storage';
-import { useSessionStatus } from '@/shared/hooks/useSessionStatus';
+import { useSessionStatus } from '@/features/sessions/hooks/useSessionStatus';
+import { logger } from '@/shared/services/logger';
+
+const sseLogger = logger.tag('SSE');
+const connectionLogger = logger.tag('Connection');
+const projectLogger = logger.tag('Project');
+const sessionLogger = logger.tag('Session');
+const deepLinkLogger = logger.tag('DeepLink');
 
 export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
   // Core state
@@ -41,20 +49,73 @@ export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
    const messaging = useMessageProcessing();
    const models = useModelManager(baseUrl, projects.selectedProject);
     const todos = useTodoManager(baseUrl, projects.selectedSession?.id, projects.selectedProject);
-   const sessionStatus = useSessionStatus(projects.selectedSession);
+   const sessionStatus = useSessionStatus(projects.selectedSession, baseUrl, projects.selectedProject, messaging);
 
-   const handleDeepLink = useCallback(async (deepLinkData) => {
-     console.debug('[DeepLink] Processing:', deepLinkData.type);
-     const { serverUrl, projectPath, sessionId } = deepLinkData;
+  const disconnectFromEvents = useCallback(() => {
+    connection.disconnect();
+    messaging.clearEvents();
+    projects.selectProject(null);
+    setBaseUrl(null);
+  }, [connection, messaging, projects]);
 
-     if (!connection.isConnected && serverUrl) {
-       try {
-         await connect(serverUrl, { autoSelect: false });
-       } catch (error) {
-         console.error('[DeepLink] Connect failed:', error);
-         return;
+  const connect = useCallback(async (url, options = {}) => {
+    const { autoSelect = false, forceReconnect = false } = options;
+
+    try {
+      // Disconnect if forcing reconnect
+      if (forceReconnect && connection.isConnected) {
+        disconnectFromEvents();
+      }
+
+      // Validate and connect
+      const cleanUrl = await connectionMgr.validateAndConnect(url);
+      setBaseUrl(cleanUrl);
+      setInputUrl(url);
+
+       // Auto-select saved project/session if requested
+       if (autoSelect) {
+         try {
+           const savedProject = await storage.get('lastSelectedProject');
+           const savedSession = await storage.get('lastSelectedSession');
+
+           if (savedProject) {
+             projectLogger.debug('Auto-selecting saved project', { name: savedProject.name });
+             await projects.selectProject(savedProject);
+
+             if (savedSession) {
+               sessionLogger.debug('Auto-selecting saved session', { title: savedSession.title });
+               await projects.selectSession(savedSession);
+             }
+           } else {
+             projectLogger.debug('No saved project to auto-select, showing project selector');
+             setShouldShowProjectSelector(true);
+           }
+         } catch (error) {
+           connectionLogger.error('Error during auto-selection', error);
+         }
        }
+
+      // Save successful connection URL
+      await storage.set('lastConnectedUrl', url);
+
+     } catch (error) {
+       connectionLogger.error('Connection failed', error);
+       throw error;
      }
+   }, [connectionMgr, projects, connection.isConnected, disconnectFromEvents]);
+
+    const handleDeepLink = useCallback(async (deepLinkData) => {
+      deepLinkLogger.debug('Processing deep link', { type: deepLinkData.type });
+      const { serverUrl, projectPath, sessionId } = deepLinkData;
+
+      if (!connection.isConnected && serverUrl) {
+        try {
+          await connect(serverUrl, { autoSelect: false });
+        } catch (error) {
+          connectionLogger.error('Deep link connection failed', error);
+          return;
+        }
+      }
 
      if (projectPath && projects.projects) {
        const project = projects.projects.find(p => p.path === projectPath);
@@ -80,171 +141,135 @@ export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
      onDeepLink: handleDeepLink,
    });
 
-  // Debug: Log projects changes
-  useEffect(() => {
-    console.debug('useSSE projects updated:', projects.projects?.length || 0, 'projects');
-  }, [projects.projects]);
+   // Debug: Log projects changes
+   useEffect(() => {
+     projectLogger.debug('Projects updated', { count: projects.projects?.length || 0 });
+   }, [projects.projects]);
 
-  // Show embedded project selector when projects are loaded but no project is selected
-  useEffect(() => {
-    if (projects.projects && projects.projects.length > 0 && !projects.selectedProject && connection.isConnected) {
-      console.debug('useSSE: Projects loaded but no project selected - showing embedded selector');
-      setShouldShowProjectSelector(true);
-    }
-  }, [projects.projects, projects.selectedProject, connection.isConnected]);
+   // Show embedded project selector when projects are loaded but no project is selected
+   useEffect(() => {
+     if (projects.projects && projects.projects.length > 0 && !projects.selectedProject && connection.isConnected) {
+       projectLogger.debug('Projects loaded, showing embedded project selector');
+       setShouldShowProjectSelector(true);
+     }
+   }, [projects.projects, projects.selectedProject, connection.isConnected]);
 
-  // Unified connect function
-  const connect = useCallback(async (url, options = {}) => {
-    const { autoSelect = false, forceReconnect = false } = options;
-
-    try {
-      // Disconnect if forcing reconnect
-      if (forceReconnect && connection.isConnected) {
-        disconnectFromEvents();
-      }
-
-      // Validate and connect
-      const cleanUrl = await connectionMgr.validateAndConnect(url);
-      setBaseUrl(cleanUrl);
-      setInputUrl(url);
-
-      // Auto-select saved project/session if requested
-      if (autoSelect) {
-        try {
-          const savedProject = await storage.get('lastSelectedProject');
-          const savedSession = await storage.get('lastSelectedSession');
-
-          if (savedProject) {
-            console.debug('📁 Auto-selecting saved project:', savedProject.name);
-            await projects.selectProject(savedProject);
-
-            if (savedSession) {
-              console.debug('💬 Auto-selecting saved session:', savedSession.title);
-              await projects.selectSession(savedSession);
-            }
-          } else {
-            console.debug('ℹ️ No saved project to auto-select - will show project selector');
-            setShouldShowProjectSelector(true);
-          }
-        } catch (error) {
-          console.error('❌ Error during auto-selection:', error);
-        }
-      }
-
-      // Save successful connection URL
-      await storage.set('lastConnectedUrl', url);
-
-    } catch (error) {
-      console.error('Connection failed:', error);
-      throw error;
-    }
-  }, [connectionMgr, projects]);
-
-  // Load saved URL on mount
   useEffect(() => {
     const loadSavedUrl = async () => {
-      const savedUrl = await storage.get('lastConnectedUrl');
-      if (savedUrl) {
-        setInputUrl(savedUrl);
+      try {
+        const savedUrl = await storage.get('lastConnectedUrl');
+        if (savedUrl) {
+          setInputUrl(savedUrl);
+        }
+      } catch (error) {
+        connectionLogger.error('Failed to load saved URL', error);
       }
     };
     loadSavedUrl();
   }, []);
 
-  // Auto-connect on app start if we have a saved URL
-  useEffect(() => {
-    const autoConnect = async () => {
-      try {
-        const savedUrl = await storage.get('lastConnectedUrl');
-        console.debug('Checking for saved connection:', savedUrl);
+   // Auto-connect on app start if we have a saved URL
+   useEffect(() => {
+     const autoConnect = async () => {
+       try {
+         const savedUrl = await storage.get('lastConnectedUrl');
+         connectionLogger.debug('Checking for saved connection');
 
-        if (savedUrl && inputUrl === savedUrl && !autoConnectAttempted) {
-          console.debug('\n===== AUTO-CONNECT ATTEMPT =====');
-          console.debug('Saved URL:', savedUrl);
-          console.debug('Connected:', connection.isConnected);
-          console.debug('Input URL:', inputUrl);
-          console.debug('================================\n');
+         if (savedUrl && inputUrl === savedUrl && !autoConnectAttempted) {
+           connectionLogger.debug('Auto-connect attempt starting', { url: savedUrl });
+           setAutoConnectAttempted(true);
 
-          setAutoConnectAttempted(true);
+             try {
+               if (!connection.isConnected) {
+                 connectionLogger.debug('Establishing connection...');
+                 await connect(savedUrl, { autoSelect: false });
+               } else {
+                 connectionLogger.debug('Already connected, loading projects...');
+                 await projects.loadProjects();
 
-            try {
-              // Connect and load projects if not already connected
-              if (!connection.isConnected) {
-                console.debug('Establishing connection...');
-                await connect(savedUrl, { autoSelect: false }); // Just connect, don't auto-select
-              } else {
-                console.debug('Already connected, loading projects...');
-                // Just load projects and try auto-selection
-                await projects.loadProjects();
+                 const savedProject = await storage.get('lastSelectedProject');
+                 const savedSession = await storage.get('lastSelectedSession');
 
-                const savedProject = await storage.get('lastSelectedProject');
-                const savedSession = await storage.get('lastSelectedSession');
+                 if (savedProject) {
+                   projectLogger.debug('Auto-selecting saved project', { name: savedProject.name });
+                   await projects.selectProject(savedProject);
+                   projectLogger.debug('Project auto-selected');
+                 } else {
+                   projectLogger.debug('No saved project, triggering project selector');
+                   setShouldShowProjectSelector(true);
+                 }
 
-                if (savedProject) {
-                  console.debug('Auto-selecting saved project:', savedProject.name);
-                  await projects.selectProject(savedProject);
-                  console.debug('Project auto-selected, user can now choose session manually');
-                } else {
-                  console.debug('No saved project to auto-select - triggering project selector');
-                  setShouldShowProjectSelector(true);
-                }
+                 connectionLogger.debug('Auto-connect completed');
+               }
+           } catch (error) {
+             connectionLogger.error('Auto-connect failed', error);
+             setAutoConnectAttempted(false);
+           }
+         } else {
+           connectionLogger.debug('Skipping auto-connect', {
+             hasSavedUrl: !!savedUrl,
+             urlMatches: inputUrl === savedUrl,
+             alreadyAttempted: autoConnectAttempted,
+             isConnected: connection.isConnected
+           });
+         }
+       } catch (error) {
+         connectionLogger.error('Error during auto-connect check', error);
+       }
+     };
 
-                console.debug('\n===== AUTO-CONNECT COMPLETED =====\n');
-              }
-          } catch (error) {
-            console.error('Auto-connect failed:', error);
-            setAutoConnectAttempted(false); // Allow retry
+     const timeoutId = setTimeout(autoConnect, 500);
+     return () => clearTimeout(timeoutId);
+   }, [inputUrl, autoConnectAttempted, connection.isConnected, projects, connect]);
+
+      // Event manager for SSE messages
+      const eventManager = useEventManager(
+        (message) => {
+          sseLogger.debugCtx('SSE_FLOW', 'Received SSE message', { type: message.payload?.type });
+
+          if (message.payload?.type === 'session.status' || message.payload?.type === 'session.idle') {
+            sseLogger.debugCtx('SESSION_MANAGEMENT', 'Handling session status/idle');
+            sessionStatus.handleSessionStatus(message);
           }
-        } else {
-          console.debug('Skipping auto-connect:', {
-            hasSavedUrl: !!savedUrl,
-            urlMatches: inputUrl === savedUrl,
-            alreadyAttempted: autoConnectAttempted,
-            isConnected: connection.isConnected
-          });
-        }
-      } catch (error) {
-        console.error('❌ Error during auto-connect check:', error);
-      }
-    };
 
-    // Small delay to ensure everything is initialized
-    const timeoutId = setTimeout(autoConnect, 500);
-    return () => clearTimeout(timeoutId);
-  }, [inputUrl, autoConnectAttempted, connection.isConnected, projects, connect]);
+          const processedMessage = messaging.processMessage(message, currentAgentMode);
 
-  // Event manager for SSE messages
-  const eventManager = useEventManager(
-    (message) => {
-      // Handle session status messages
-      if (message.payload?.type === 'session.status') {
-        sessionStatus.handleSessionStatus(message);
-        return; // Don't process as regular message
-      }
+          if (processedMessage && !processedMessage.isPartial) {
+            const rawAgent = processedMessage.rawData?.payload?.properties?.info?.agent;
+            const hasAgent = !!rawAgent;
 
-      // Handle regular messages
-      const processedMessage = messaging.processMessage(message, currentAgentMode);
-      messaging.addEvent(processedMessage);
-    },
-    projects.selectedSession
-  );
+            if (processedMessage.role === 'user') {
+              if (hasAgent) {
+                sseLogger.debugCtx('SSE_FLOW', 'Skipping contradictory message (role=user but has agent)', {
+                  messageId: processedMessage.messageId,
+                  agent: rawAgent,
+                });
+              } else {
+                sseLogger.debugCtx('SSE_FLOW', 'Skipping user role message (already shown locally)', {
+                  messageId: processedMessage.messageId,
+                });
+              }
+              return;
+            }
 
-  // Disconnect from server
-  const disconnectFromEvents = useCallback(() => {
-    connection.disconnect();
-    messaging.clearEvents();
-    projects.selectProject(null);
-    setBaseUrl(null);
-    clearSession();
-  }, [connection, messaging, projects]);
+            if (processedMessage.type === 'message_finalized' && !processedMessage.message) {
+              sseLogger.debugCtx('SSE_FLOW', 'Skipping message without content (waiting for parts)', {
+                messageId: processedMessage.messageId,
+                hasParts: processedMessage.assembledFromParts,
+              });
+              return;
+            }
 
-  // Send message
+            messaging.addEvent(processedMessage);
+          }
+        },
+        projects.selectedSession
+      );
+
   const sendMessage = useCallback(async (messageText, agent = {name: 'build'}) => {
     if (!projects.selectedSession) {
       throw new Error('No session selected');
     }
-
-    setCurrentSession(projects.selectedSession, baseUrl);
 
     if (!connection.isConnected) {
       throw new Error('Not connected');
@@ -257,12 +282,10 @@ export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
     const agentName = typeof agent === 'string' ? agent : agent.name;
     setCurrentAgentMode(agentName);
 
-    // Auto-select model if agent has default model
     if (typeof agent === 'object' && agent.model) {
       await models.selectModel(agent.model.providerID, agent.model.modelID);
     }
 
-    // Add sent message to UI immediately
     const sentMessageId = generateMessageId();
     messaging.addEvent({
       id: sentMessageId,
@@ -277,22 +300,25 @@ export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
     });
 
     try {
-      // Send to server asynchronously
-      const response = await sendMessageToSession(messageText, agentName, projects.selectedProject, models.selectedModel, true);
+      const response = await sendMessageToSession(
+        messageText,
+        agentName,
+        projects.selectedProject,
+        models.selectedModel,
+        true,
+        projects.selectedSession,
+        baseUrl
+      );
 
-      // Update UI state
       todos.setExpanded(false);
 
       return response;
     } catch (error) {
-      console.error('Message send failed:', error);
-
-      // Remove only the failed message from UI instead of clearing all events
+      connectionLogger.error('Message send failed', error);
       messaging.removeEvent(sentMessageId);
-
       throw error;
     }
-  }, [connection.isConnected, messaging, projects.selectedProject, models, todos, currentAgentMode]);
+  }, [connection.isConnected, messaging, projects.selectedProject, projects.selectedSession, models, todos, baseUrl]);
 
   // Clear error (placeholder)
   const clearError = useCallback(() => {
@@ -314,19 +340,19 @@ export const useSSEOrchestrator = (initialUrl = 'http://10.1.1.122:63425') => {
     await projects.selectProject(project);
   }, [projects]);
 
-  const selectSession = useCallback((session) => {
-    console.debug('useSSE: selectSession called with', session?.title);
-    projects.selectSession(session);
-    console.debug('useSSE: after selectSession, selectedSession is', projects.selectedSession?.title);
-    // Clear previous messages and load new session messages
-    if (session && baseUrl) {
-      messaging.clearEvents();
-      messaging.loadMessages(baseUrl, session.id, projects.selectedProject);
-    } else {
-      // Clear events if no session selected
-      messaging.clearEvents();
-    }
-  }, [projects, messaging, baseUrl]);
+   const selectSession = useCallback(async (session) => {
+     sessionLogger.debug('Selecting session', { title: session?.title });
+     await projects.selectSession(session);
+     sessionLogger.debug('Session selected', { title: projects.selectedSession?.title });
+     // Clear previous messages and load new session messages
+     if (session && baseUrl) {
+       messaging.clearEvents();
+       messaging.loadMessages(baseUrl, session.id, projects.selectedProject);
+     } else {
+       // Clear events if no session selected
+       messaging.clearEvents();
+     }
+   }, [projects, messaging, baseUrl]);
 
   const createSession = useCallback(async () => {
     return await projects.createSession();

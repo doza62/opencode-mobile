@@ -1,11 +1,14 @@
 /**
- * Message normalizer for handling different data structures from loaded vs SSE messages
- * Provides robust, performant transformation to standardized format
+ * Message normalization utility for opencode SSE messages
+ * Transforms loaded API messages into SSE-compatible format
  */
+import { logger } from '@/shared/services/logger';
+
+const normalizerLogger = logger.tag('MessageNormalizer');
+const perfLogger = logger.tag('PERF');
 
 import { generateMessageId } from './messageIdGenerator';
 import { MESSAGE_SCHEMAS } from '@/shared/constants';
-import { logger } from '@/shared';
 
 /**
  * Detects the structure type of a message
@@ -85,6 +88,15 @@ export const normalizeLoadedMessage = (loadedMessage) => {
   try {
     const structureType = detectMessageStructure(loadedMessage);
 
+    normalizerLogger.debug('Normalizing loaded message', {
+      structureType,
+      hasParts: !!(loadedMessage.parts || loadedMessage.properties?.parts),
+      hasInfo: !!(loadedMessage.info || loadedMessage.properties?.info),
+      hasPayload: !!loadedMessage.payload,
+      originalType: loadedMessage.type,
+      rawKeys: Object.keys(loadedMessage).slice(0, 10)
+    });
+
     if (structureType === 'SSE') {
       // Already in correct format
       return loadedMessage;
@@ -96,25 +108,35 @@ export const normalizeLoadedMessage = (loadedMessage) => {
     }
 
     // Transform LOADED structure to SSE structure
+    const originalSessionId = loadedMessage.sessionId || loadedMessage.session_id || loadedMessage.properties?.sessionID || loadedMessage.info?.sessionID;
+
+    // Detect if this is a message.loaded type (has info + parts)
+    const hasParts = loadedMessage.parts || loadedMessage.properties?.parts;
+    const hasInfo = loadedMessage.info || loadedMessage.properties?.info;
+    const detectedType = (hasInfo && hasParts) ? 'message.loaded' : (loadedMessage.type || 'unknown');
+
     const normalized = {
-      // Preserve original fields
-      ...loadedMessage,
+      // Preserve original fields including sessionId at top level
+      sessionId: originalSessionId,
+      session_id: originalSessionId,
 
       // Add payload wrapper if missing
       payload: loadedMessage.payload || {
-        type: loadedMessage.type || 'unknown',
+        type: detectedType,
         properties: {
           info: loadedMessage.info || loadedMessage.properties?.info || {},
-          sessionID: loadedMessage.sessionId || loadedMessage.session_id || loadedMessage.properties?.sessionID,
+          sessionID: originalSessionId,
+          // Copy parts from top level or from properties
+          parts: loadedMessage.parts || loadedMessage.properties?.parts,
           // Copy other properties
           ...loadedMessage.properties
         }
       }
     };
 
-    // Ensure session ID is accessible at top level
-    if (!normalized.sessionId && !normalized.session_id) {
-      normalized.sessionId = getNestedProperty(normalized, ['payload', 'properties', 'sessionID']);
+    // Ensure message has an ID for React keys
+    if (!normalized.id) {
+      normalized.id = generateMessageId();
     }
 
     // Ensure message has an ID for React keys
@@ -306,10 +328,9 @@ export const applyNormalizerPlugins = (message) => {
     if (plugin.applies(transformed)) {
       try {
         transformed = plugin.transform(transformed);
-        console.debug(`🔌 Applied plugin ${plugin.name} to message`);
+        normalizerLogger.debugCtx('MESSAGE_PROCESSING', 'Applied plugin to message', { plugin: plugin.name });
       } catch (error) {
-        console.warn(`🔌 Plugin ${plugin.name} failed:`, error);
-        // Continue with other plugins
+        normalizerLogger.warn('Plugin failed', { plugin: plugin.name, error: error.message });
       }
     }
   }

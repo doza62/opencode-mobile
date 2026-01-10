@@ -23,3 +23,7 @@ export const HTTP_STATUS = {
   NOT_FOUND: 404,
   INTERNAL_SERVER_ERROR: 500
 };
+
+export const MESSAGE_LIMITS = {
+  SESSION_MESSAGES: 100 // Max messages to load when session starts
+};

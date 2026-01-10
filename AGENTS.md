@@ -287,6 +287,102 @@ export class ApiClient {
 - **Subfolder standardization**: Added missing `types/` subfolders to `features/models/` and `features/notifications/`, added missing `utils/` to `features/todos/`
 - **Export cleanup**: Removed broken exports and maintained barrel export consistency across all features
 
+## Logging Guidelines
+
+### Using the Logger Service
+
+The application uses a centralized logging service at `src/shared/services/logger.js`. All logging should use this service instead of direct `console.*` calls.
+
+```javascript
+import { logger } from '@/shared/services/logger';
+
+// Create a tagged logger for your feature
+const myLogger = logger.tag('MyFeature');
+
+myLogger.debug('Debug message', { data });
+myLogger.info('Info message', { data });
+myLogger.warn('Warning message', { data });
+myLogger.error('Error message', error);
+```
+
+### Severity Levels
+
+| Level | When to Use | Examples |
+|-------|-------------|----------|
+| **ERROR** | Functionality broken, requires attention | Failed API calls, unhandled exceptions, critical failures |
+| **WARN** | Potential issues, fallbacks used, deprecated paths | Missing optional data, using fallbacks, deprecated APIs |
+| **INFO** | Important state changes, user actions, connection events | User connected, session selected, project loaded |
+| **DEBUG** | Detailed flow tracking for development | Message processing steps, SSE events received |
+
+### Tag Naming Conventions
+
+Use PascalCase for tags:
+- **Feature-specific**: `SSE`, `Message`, `Session`, `API`, `Storage`
+- **Component-specific**: `SessionDrawer`, `ChatInput`, `EventList`
+- **Domain-specific**: `Notification`, `DeepLink`, `PushToken`, `Todo`, `Model`
+
+### Message Format
+
+```javascript
+// ✅ GOOD
+logger.debug('[Tag] Clear action', { key: value });
+logger.warn('[API] Failed request', { url, error: error.message });
+
+// ❌ BAD
+console.warn('💤 doing something', ...lots, ...of, ...context);
+```
+
+### Context-Based Filtering
+
+Enable/disable logging for specific areas:
+
+```javascript
+logger.enableContext('SSE_FLOW');   // Enable SSE flow logs
+logger.disableContext('SSE_FLOW');  // Disable them
+```
+
+### Rate Limiting
+
+Prevent log spam from high-frequency operations:
+
+```javascript
+// Creates a rate-limited logger (max 1 log per second)
+const filteredLogger = logger.rateLimit('SessionFilter', 1);
+filteredLogger.debug('This logs max once per second');
+```
+
+### Performance Tracking
+
+Track operation durations:
+
+```javascript
+logger.timeStart('myOperation');
+// ... do work ...
+const result = logger.timeEnd('myOperation');
+if (result?.slow) {
+  logger.warn('Slow operation detected', result);
+}
+```
+
+### When NOT to Log
+
+- ❌ Component renders (use React DevTools)
+- ❌ Every iteration of a loop (use rate limiting)
+- ❌ Data dumps (log counts/summaries instead)
+- ❌ Sensitive information (passwords, tokens, etc.)
+
+### Configuration
+
+Log levels are environment-based:
+- **Development**: DEBUG level (all logs enabled)
+- **Production**: WARN level (only warnings and errors)
+
+Override at runtime:
+```javascript
+logger.setLevel('DEBUG'); // Enable all logs
+logger.setLevel('ERROR'); // Only errors
+```
+
 ## Future Improvements
 
 ### Planned Additions

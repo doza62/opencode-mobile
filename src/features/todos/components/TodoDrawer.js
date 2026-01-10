@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, FlatList } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import TodoStatusIcon from './TodoStatusIcon';
@@ -24,13 +24,23 @@ const TodoDrawer = ({ todos = [], expanded, setExpanded }) => {
     setExpanded(!expanded);
   };
 
-  // Filter todos for collapsed view: current (in_progress) or first pending
   const currentTask = todos.find(todo => todo.status === 'in_progress') ||
                       todos.find(todo => todo.status === 'pending');
   const collapsedTodos = currentTask ? [currentTask] : [];
-
-  // Use all todos when expanded, collapsed todos when not
   const displayTodos = expanded ? todos : collapsedTodos;
+  const hasTodos = todos.length > 0;
+
+  const maxHeight = useMemo(() => {
+    const collapsedHeight = collapsedTodos.length * 60;
+    return expanded ? Math.min(todos.length * 60, 300) : collapsedHeight;
+  }, [expanded, todos.length, collapsedTodos.length]);
+
+  const animatedMaxHeight = useMemo(() => {
+    return animation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [collapsedTodos.length * 60, maxHeight]
+    });
+  }, [animation, collapsedTodos.length, maxHeight]);
 
   const renderTodoItem = ({ item, index }) => {
     const isFirstItem = index === 0;
@@ -63,8 +73,6 @@ const TodoDrawer = ({ todos = [], expanded, setExpanded }) => {
     );
   };
 
-
-
   const getPriorityStyle = (priority) => {
     switch (priority) {
       case 'critical':
@@ -78,16 +86,10 @@ const TodoDrawer = ({ todos = [], expanded, setExpanded }) => {
     }
   };
 
-  const hasTodos = todos.length > 0;
-  const maxHeight = expanded ? Math.min(todos.length * 60, 300) : collapsedTodos.length * 60;
-
   return (
     <View>
       {hasTodos && (
-        <Animated.View style={[styles.container, { maxHeight: animation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [collapsedTodos.length * 60, maxHeight]
-        }) }]}>
+        <Animated.View style={[styles.container, { maxHeight: animatedMaxHeight }]}>
           <FlatList
             data={displayTodos}
             keyExtractor={(item) => item.id}
