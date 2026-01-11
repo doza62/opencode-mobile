@@ -283,7 +283,10 @@ const EventItem = ({ item, theme, markdownStyles, onCopy, showToast }) => {
 
   // Debug metadata - shows role, type, source for each message
   // Always show for development visibility
-  const debugText = `${debugId} | role:${item.role ?? 'UNDEF'} | type:${item.type} | src:${item.source || '?'}`;
+  const hasReasoning = !!item.reasoning || item.parts?.some(p => p.type === 'reasoning');
+  const textLength = (item.message || '').length;
+  const partsCount = item.parts?.length || 0;
+  const debugText = `${debugId} | ${item.role || '?'} | ${item.type} | ${item.mode || '?'} | ${hasReasoning ? '📝' : '📄'} | ${textLength} chars | ${partsCount} parts | src:${item.source || '?'}`;
 
   return (
     <View
