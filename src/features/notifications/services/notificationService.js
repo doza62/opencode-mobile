@@ -89,6 +89,32 @@ class NotificationService {
     });
   }
 
+  /**
+   * Schedule URL update notification - shows alert to user so they tap to update
+   * @param {string} newUrl - The new server URL
+   */
+  async scheduleUrlUpdateNotification(newUrl) {
+    if (!this.isInitialized) {
+      notificationLogger.debug('Not initialized, skipping URL update notification');
+      return;
+    }
+
+    notificationLogger.info('Scheduling URL update notification', { newUrl });
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Server URL Updated',
+        body: 'Tap to reconnect with the new server address',
+        data: {
+          type: 'url_update',
+          newUrl,
+        },
+        sound: 'default',
+      },
+      trigger: null,
+    });
+  }
+
   setCurrentSessionGetter(getter) {
     this.getCurrentSession = getter;
   }

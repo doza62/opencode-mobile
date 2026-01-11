@@ -36,7 +36,10 @@ class DeepLinkService {
 
   handleNotificationResponse(response) {
     const data = response.notification?.request?.content?.data;
-    if (!data) return;
+    if (!data) {
+      deepLinkLogger.warn('No data found in notification response');
+      return;
+    }
 
     deepLinkLogger.debug('Notification tapped', { type: data.type });
 

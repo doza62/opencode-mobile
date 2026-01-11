@@ -1,5 +1,7 @@
 // Messaging components exports
-export { default as EventList } from './EventList';
+export { default as MessageEventList } from './MessageEventList';
+export { default as EventItem } from './EventItem';
+export { default as EventList } from './MessageEventList'; // Backwards compatibility alias
 export { default as MessageDebugModal } from './MessageDebugModal';
 export { default as SessionMessageFilter } from './SessionMessageFilter';
 

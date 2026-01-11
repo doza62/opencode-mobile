@@ -50,7 +50,8 @@
         {
           "icon": "./assets/opencode-icon.png",
           "color": "#000000",
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "vapidPublicKey": "YOUR_VAPID_PUBLIC_KEY_HERE"
         }
       ]
     ]

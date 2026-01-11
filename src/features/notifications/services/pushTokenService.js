@@ -8,8 +8,6 @@ import { logger } from '@/shared/services/logger';
 
 const pushTokenLogger = logger.tag('PushToken');
 
-const TOKEN_API_PORT = 4097;
-
 class PushTokenService {
   constructor() {
     this.token = null;
@@ -103,30 +101,18 @@ class PushTokenService {
   }
 
   getTokenApiUrl() {
-    if (!this.serverBaseUrl) return null;
-
-    try {
-      const url = new URL(this.serverBaseUrl);
-      const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || /^192\.168\./.test(url.hostname);
-
-      if (isLocalhost) {
-        return this.serverBaseUrl.replace(/:(\d+)(?=$|\/)/, `:${TOKEN_API_PORT}`);
-      }
-      return `${url.protocol}//notif-${url.host}`;
-    } catch {
-      return this.serverBaseUrl.replace(/:(\d+)(?=$|\/)/, `:${TOKEN_API_PORT}`);
-    }
+    return this.serverBaseUrl;
   }
 
   async registerWithServer() {
-    const tokenApiUrl = this.getTokenApiUrl();
-    if (!this.token || !tokenApiUrl) {
+    const baseUrl = this.getTokenApiUrl();
+    if (!this.token || !baseUrl) {
       pushTokenLogger.debug('Cannot register - missing token or server URL');
       return false;
     }
 
     try {
-      const response = await fetch(`${tokenApiUrl}/push-token`, {
+      const response = await fetch(`${baseUrl}/push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -167,11 +153,11 @@ class PushTokenService {
   }
 
   async unregister() {
-    const tokenApiUrl = this.getTokenApiUrl();
-    if (!tokenApiUrl || !this.deviceId) return;
+    const baseUrl = this.getTokenApiUrl();
+    if (!baseUrl || !this.deviceId) return;
 
     try {
-      await fetch(`${tokenApiUrl}/push-token`, {
+      await fetch(`${baseUrl}/push-token`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: this.deviceId }),
@@ -185,11 +171,11 @@ class PushTokenService {
   }
 
   async sendTest() {
-    const tokenApiUrl = this.getTokenApiUrl();
-    if (!tokenApiUrl) return false;
+    const baseUrl = this.getTokenApiUrl();
+    if (!baseUrl) return false;
 
     try {
-      const response = await fetch(`${tokenApiUrl}/push-token/test`, { method: 'POST' });
+      const response = await fetch(`${baseUrl}/push-token/test`, { method: 'POST' });
       return response.ok;
     } catch (error) {
       pushTokenLogger.error('Test notification error', error);

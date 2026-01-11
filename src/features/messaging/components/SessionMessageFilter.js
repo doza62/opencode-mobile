@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import EventList from './EventList';
+import MessageEventList from './MessageEventList';
 import { logger } from '@/shared/services/logger';
 
 const filterLogger = logger.tag('SessionFilter');
@@ -11,9 +11,9 @@ const SessionMessageFilter = ({
   onClearError,
   allUnclassifiedMessages,
   isThinking,
-  allMessages
+  allMessages,
+  onLoadOlderMessages,
 }) => {
-
   const filteredEvents = useMemo(() => {
     const filtered = [];
 
@@ -23,7 +23,7 @@ const SessionMessageFilter = ({
           index,
           type: event.type,
           category: event.category,
-          payloadType: event.payloadType
+          payloadType: event.payloadType,
         });
       }
 
@@ -57,7 +57,10 @@ const SessionMessageFilter = ({
     const filtered = {};
 
     if (!groupedUnclassifiedMessages || typeof groupedUnclassifiedMessages !== 'object') {
-      filterLogger.warn('groupedUnclassifiedMessages is undefined or not an object', groupedUnclassifiedMessages);
+      filterLogger.warn(
+        'groupedUnclassifiedMessages is undefined or not an object',
+        groupedUnclassifiedMessages,
+      );
       return filtered;
     }
 
@@ -75,12 +78,13 @@ const SessionMessageFilter = ({
   }, [groupedUnclassifiedMessages]);
 
   return (
-    <EventList
+    <MessageEventList
       events={filteredEvents}
       groupedUnclassifiedMessages={allUnclassifiedMessages || allMessages}
       error={null}
       onClearError={onClearError}
       isThinking={isThinking}
+      onLoadOlderMessages={onLoadOlderMessages}
     />
   );
 };

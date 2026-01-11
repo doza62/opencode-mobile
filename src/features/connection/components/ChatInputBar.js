@@ -9,7 +9,7 @@ import { getAgentColor } from '@/shared/utils/agentColorUtils';
 import { CommandDrawer } from '@/features/commands/components';
 import { useCommands } from '@/features/commands/hooks';
 
-const ChatInputBar = ({ inputUrl, onUrlChange, onConnect, onSendMessage, isConnecting, isConnected, isServerReachable, baseUrl, selectedProject }) => {
+const ChatInputBar = ({ inputUrl, onUrlChange, onConnect, onSendMessage, onSendCommand, isConnecting, isConnected, isServerReachable, baseUrl, selectedProject }) => {
   const theme = useTheme();
   const styles = useMemo(() => getStyles(theme), [theme]);
   const [messageText, setMessageText] = useState('');
@@ -71,7 +71,15 @@ const ChatInputBar = ({ inputUrl, onUrlChange, onConnect, onSendMessage, isConne
   const handleSendMessage = async () => {
     if (messageText.trim()) {
       try {
-        await onSendMessage(messageText.trim(), selectedAgent || {name: 'build'});
+        const trimmedMessage = messageText.trim();
+        const isCommand = trimmedMessage.startsWith('/');
+
+        if (isCommand && onSendCommand) {
+          await onSendCommand(trimmedMessage);
+        } else {
+          await onSendMessage(trimmedMessage, selectedAgent || {name: 'build'});
+        }
+
         setMessageText('');
         setShowCommandDrawer(false);
         setCommandFilter('');

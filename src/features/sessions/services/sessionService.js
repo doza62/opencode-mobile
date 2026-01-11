@@ -112,17 +112,74 @@ export const deleteSession = async (sessionId, serverBaseUrl, selectedProject = 
   }
 };
 
-export const getSessionMessages = async (sessionId, serverBaseUrl, selectedProject = null, limit = MESSAGE_LIMITS.SESSION_MESSAGES) => {
+export const getSessionMessages = async (sessionId, serverBaseUrl, selectedProject = null, limit = MESSAGE_LIMITS.SESSION_MESSAGES, before = null) => {
   try {
-    const response = await apiClient.get(`${serverBaseUrl}/session/${sessionId}/message?limit=${limit}`, {
+    let url = `${serverBaseUrl}/session/${sessionId}/message?limit=${limit}`;
+    if (before) {
+      url += `&before=${before}`;
+    }
+    const response = await apiClient.get(url, {
       headers: { 'Accept': 'application/json' }
     }, selectedProject);
 
     const data = await apiClient.parseJSON(response);
-    logger.emoji('📥', `Retrieved ${data?.length || 0} messages from session`, { sessionId, limit });
+    logger.emoji('📥', `Retrieved ${data?.length || 0} messages from session`, { sessionId, limit, before });
     return data || [];
   } catch (error) {
     logger.error('Failed to get session messages', error);
+    throw error;
+  }
+};
+
+/**
+ * Send a slash command to the server
+ * @param {string} commandName - Command name (without leading slash)
+ * @param {Object} selectedProject - Currently selected project
+ * @param {Object} session - Active session
+ * @param {string} serverBaseUrl - Server base URL
+ * @param {Array<string>} args - Command arguments
+ * @returns {Promise<Object>} Command response with message and parts
+ */
+export const sendCommandToSession = async (
+  commandName,
+  selectedProject = null,
+  session = null,
+  serverBaseUrl = null,
+  args = []
+) => {
+  if (!session || !serverBaseUrl) {
+    throw new Error('No active session. Please provide session and serverBaseUrl.');
+  }
+
+  if (!selectedProject) {
+    throw new Error('No project selected for command');
+  }
+
+  if (!session.id || typeof session.id !== 'string') {
+    throw new Error(`Invalid session ID: ${session.id}`);
+  }
+
+  const commandUrl = `${serverBaseUrl}/session/${session.id}/command`;
+
+  const commandBody = {
+    command: commandName,
+    arguments: args.join(' ')
+  };
+
+  logger.emoji('⚡', `Sending command /${commandName}`, {
+    sessionId: session.id,
+    projectPath: selectedProject?.worktree || selectedProject?.directory,
+    commandUrl,
+    arguments: args
+  });
+
+  try {
+    const response = await apiClient.post(commandUrl, commandBody, {}, selectedProject);
+    const data = await apiClient.parseJSON(response);
+    logger.emoji('✅', `Command /${commandName} executed successfully`, data);
+    return data;
+  } catch (error) {
+    logger.error(`Command /${commandName} failed`, error);
     throw error;
   }
 };

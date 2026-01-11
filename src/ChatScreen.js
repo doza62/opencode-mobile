@@ -40,12 +40,10 @@ import { StatusBarActions } from '@/features/sessions/components';
 import TodoDrawer from '@/features/todos/components/TodoDrawer';
 import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
 
+export default function ChatScreen(props) {
+  const theme = useTheme();
 
-
- export default function ChatScreen(props) {
-   const theme = useTheme();
-
-     const [showLogs, setShowLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
      const [showInfoBar, setShowInfoBar] = useState(false);
      const [debugVisible, setDebugVisible] = useState(false);
      const [sessionModalVisible, setSessionModalVisible] = useState(false);
@@ -55,29 +53,21 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
      const { sidebarVisible, sessionDrawerVisible, toggleSidebar, setSidebarVisible, setSessionDrawerVisible } = useSidebarState(isWideScreen);
      const keyboardState = useKeyboardState();
      const [debugSidebarVisible, setDebugSidebarVisible] = useState(false); // For debug sidebar
-      const viewAnimation = useRef(new Animated.Value(0)).current; // For view transitions
+  const viewAnimation = useRef(new Animated.Value(0)).current; // For view transitions
 
+  // Animate view transitions
+  useEffect(() => {
+    Animated.timing(viewAnimation, {
+      toValue: showEmbeddedSelector ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [showEmbeddedSelector]);
 
-
-
-
-
-     // Animate view transitions
-    useEffect(() => {
-      Animated.timing(viewAnimation, {
-        toValue: showEmbeddedSelector ? 1 : 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-     }, [showEmbeddedSelector]);
-
-
-
-
-     // Handle auto-connect project selector trigger
-      const { shouldShowProjectSelector } = props;
-      useEffect(() => {
-        const chatLogger = logger.tag('ChatScreen');
+  // Handle auto-connect project selector trigger
+  const { shouldShowProjectSelector } = props;
+  useEffect(() => {
+    const chatLogger = logger.tag('ChatScreen');
         if (shouldShowProjectSelector) {
           chatLogger.debug('shouldShowProjectSelector changed to true, showing embedded selector');
           setShowEmbeddedSelector(true);
@@ -108,20 +98,22 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
        selectedModel,
        modelsLoading,
        onModelSelect,
-       loadModels,
-       deleteSession,
-        connect,
-        disconnectFromEvents,
-       selectProject,
-       selectSession,
-       refreshSession,
-       createSession,
-       clearError,
-       sendMessage,
-       todoDrawerExpanded,
-       setTodoDrawerExpanded,
-       clearDebugMessages, // New function for clearing debug messages
-      } = props;
+        loadModels,
+        deleteSession,
+         connect,
+         disconnectFromEvents,
+        selectProject,
+        selectSession,
+        refreshSession,
+        createSession,
+        clearError,
+        sendMessage,
+        sendCommand,
+        todoDrawerExpanded,
+        setTodoDrawerExpanded,
+        clearDebugMessages, // New function for clearing debug messages
+        loadOlderMessages,
+       } = props;
 
      // Handle session selection - close drawer on mobile after selection
      const handleSessionSelect = (session) => {
@@ -130,15 +122,10 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
        if (!isWideScreen) {
          setSessionDrawerVisible(false);
        }
-     };
+      };
 
-     // Embedded project selector component
-
-
-
-
-   const styles = StyleSheet.create({
-     persistentSidebar: {
+    const styles = StyleSheet.create({
+      persistentSidebar: {
        position: 'absolute',
        left: 0,
        top: 0,
@@ -353,6 +340,7 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
                       allUnclassifiedMessages={groupedUnclassifiedMessages}
                       isThinking={isSessionBusy}
                       allMessages={groupedAllMessages}
+                      onLoadOlderMessages={loadOlderMessages}
                     />
                 </Animated.View>
                 <Animated.View
@@ -393,6 +381,7 @@ import TodoStatusIcon from '@/features/todos/components/TodoStatusIcon';
                   onUrlChange={setInputUrl}
                   onConnect={() => connect(inputUrl, { autoSelect: false })}
                   onSendMessage={sendMessage}
+                  onSendCommand={sendCommand}
                   isConnecting={isConnecting}
                   isConnected={isConnected}
                   isServerReachable={isServerReachable}

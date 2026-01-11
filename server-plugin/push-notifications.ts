@@ -6,6 +6,7 @@ const CONFIG_DIR = path.join(process.env.HOME || "", ".config/opencode");
 const TOKEN_FILE = path.join(CONFIG_DIR, "push-tokens.json");
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const TOKEN_API_PORT = 4097;
+const SERVER_PORT = 4096;
 
 let serverStarted = false;
 
@@ -234,7 +235,7 @@ async function startTokenServer(serverUrl: string): Promise<void> {
 }
 
 export const PushNotificationPlugin: Plugin = async (ctx) => {
-  const serverUrl = `http://${process.env.HOSTNAME || "127.0.0.1"}:${TOKEN_API_PORT}`;
+  const serverUrl = `http://${process.env.HOSTNAME || "127.0.0.1"}:${SERVER_PORT}`;
   console.log("[PushPlugin] Initializing notification server on ", serverUrl);
   await startTokenServer(serverUrl);
 

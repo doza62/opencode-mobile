@@ -12,7 +12,7 @@ import {
 } from '@expo-google-fonts/ibm-plex-mono';
 
 import ChatScreen from './src/ChatScreen';
-import { useSSEOrchestrator as useSSE } from './src/features/connection/hooks/useSSEOrchestrator';
+import { useSSEOrchestrator } from './src/features/connection/hooks/useSSEOrchestrator';
 import { ThemeProvider, useTheme } from './src/shared/components/ThemeProvider';
 import { SplashScreen, AppErrorBoundary } from './src/components/common';
 import { DEBUG } from './src/shared/constants';
@@ -30,7 +30,7 @@ console.debug('\n\n===== APP STARTED =====\n\n');
 SplashScreenNative.preventAutoHideAsync();
 
 function AppContent({ fontsLoaded, onLayoutRootView }) {
-  const sseData = useSSE();
+  const sseData = useSSEOrchestrator();
   const theme = useTheme();
   const [showSplash, setShowSplash] = useState(true);
   const [appReady, setAppReady] = useState(false);

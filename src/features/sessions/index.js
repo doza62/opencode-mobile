@@ -1,5 +1,6 @@
 export {
   sendMessageToSession,
+  sendCommandToSession,
   deleteSession,
   createSession,
   getSessionMessages,

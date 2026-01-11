@@ -30,7 +30,7 @@ const DrawerHeader = ({
     setDropdownVisible(true);
   };
 
-  const handleProjectSelect = (project) => {
+  const handleProjectSelect = project => {
     onProjectSelect(project);
     setDropdownVisible(false);
   };
@@ -39,7 +39,7 @@ const DrawerHeader = ({
     setProjectDropdownVisible(!projectDropdownVisible);
   };
 
-  const handleProjectDropdownSelect = (project) => {
+  const handleProjectDropdownSelect = project => {
     onProjectSelect(project);
     setProjectDropdownVisible(false);
   };
@@ -47,7 +47,9 @@ const DrawerHeader = ({
   const renderProjectItem = ({ item: project }) => {
     const isActive = selectedProject?.id === project.id;
     const fullPath = project.worktree || project.directory;
-    const lastUpdated = project.time?.updated ? new Date(project.time.updated).toLocaleDateString() : 'Unknown';
+    const lastUpdated = project.time?.updated
+      ? new Date(project.time.updated).toLocaleDateString()
+      : 'Unknown';
 
     return (
       <TouchableOpacity
@@ -66,7 +68,9 @@ const DrawerHeader = ({
             )}
           </View>
           <View style={styles.projectFooter}>
-            <Text style={styles.projectPath} numberOfLines={1}>{fullPath}</Text>
+            <Text style={styles.projectPath} numberOfLines={1}>
+              {fullPath}
+            </Text>
             <Text style={styles.lastUpdated}>Updated: {lastUpdated}</Text>
           </View>
         </View>
@@ -76,14 +80,24 @@ const DrawerHeader = ({
 
   return (
     <View style={styles.drawerHeader}>
-      <TouchableOpacity
-        style={styles.projectSelector}
-        onPress={handleProjectDropdownPress}
-      >
-        <Svg width="16" height="16" viewBox="0 0 24 24" style={[styles.dropdownIcon, {
-          transform: [{ rotate: projectDropdownVisible ? '90deg' : '0deg' }]
-        }]}>
-          <Path d="M5 5 L15 12 L5 19" stroke={theme.colors.textSecondary} strokeWidth="3" fill="none" />
+      <TouchableOpacity style={styles.projectSelector} onPress={handleProjectDropdownPress}>
+        <Svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          style={[
+            styles.dropdownIcon,
+            {
+              transform: [{ rotate: projectDropdownVisible ? '90deg' : '0deg' }],
+            },
+          ]}
+        >
+          <Path
+            d="M5 5 L15 12 L5 19"
+            stroke={theme.colors.textSecondary}
+            strokeWidth="3"
+            fill="none"
+          />
         </Svg>
         <Text style={[styles.projectTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>
           {selectedProject ? getProjectDisplayName(selectedProject.worktree) : 'Select Project'}
@@ -91,54 +105,62 @@ const DrawerHeader = ({
       </TouchableOpacity>
 
       {!isPersistent && (
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={onClose}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.7}>
           <View style={styles.closeIcon}>
-            <View style={[styles.closeLine, { backgroundColor: theme.colors.textSecondary, transform: [{ rotate: '45deg' }] }]} />
-            <View style={[styles.closeLine, { backgroundColor: theme.colors.textSecondary, transform: [{ rotate: '-45deg' }] }]} />
+            <View
+              style={[
+                styles.closeLine,
+                { backgroundColor: theme.colors.textSecondary, transform: [{ rotate: '45deg' }] },
+              ]}
+            />
+            <View
+              style={[
+                styles.closeLine,
+                { backgroundColor: theme.colors.textSecondary, transform: [{ rotate: '-45deg' }] },
+              ]}
+            />
           </View>
         </TouchableOpacity>
       )}
 
-      {/* Project Selection Modal (existing) */}
-      <ProjectSelectionModal
-        visible={dropdownVisible}
-        onClose={() => setDropdownVisible(false)}
-        projects={projects}
-        onProjectSelect={handleProjectSelect}
-        selectedProject={selectedProject}
-      />
+      {/* Project Selection Modal - conditionally rendered to destroy when closed */}
+      {dropdownVisible && (
+        <ProjectSelectionModal
+          visible={true}
+          onClose={() => setDropdownVisible(false)}
+          projects={projects}
+          onProjectSelect={handleProjectSelect}
+          selectedProject={selectedProject}
+        />
+      )}
 
-      {/* Project Dropdown Modal (new) */}
-      <Modal
-        visible={projectDropdownVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setProjectDropdownVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.dropdownOverlay}
-          activeOpacity={1}
-          onPress={() => setProjectDropdownVisible(false)}
+      {/* Project Dropdown Modal - conditionally rendered to destroy when closed */}
+      {projectDropdownVisible && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="none"
+          onRequestClose={() => setProjectDropdownVisible(false)}
         >
-          <View style={styles.dropdownContainer}>
-            <Text style={styles.dropdownHeader}>
-              Change Project
-            </Text>
-            <FlatList
-              data={projects}
-              keyExtractor={(item) => item.id}
-              renderItem={renderProjectItem}
-              style={styles.projectList}
-              contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 16, paddingBottom: 8 }}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+          <TouchableOpacity
+            style={styles.dropdownOverlay}
+            activeOpacity={1}
+            onPress={() => setProjectDropdownVisible(false)}
+          >
+            <View style={styles.dropdownContainer}>
+              <Text style={styles.dropdownHeader}>Change Project</Text>
+              <FlatList
+                data={projects}
+                keyExtractor={item => item.id}
+                renderItem={renderProjectItem}
+                style={styles.projectList}
+                contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 16, paddingBottom: 8 }}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 };

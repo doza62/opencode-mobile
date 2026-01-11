@@ -13,7 +13,7 @@ import { useSessionDrawerAnimation } from '@/features/sessions/hooks';
 
 import DrawerOverlay from "./DrawerOverlay";
 import DrawerHeader from "./DrawerHeader";
-import { useDrawerState } from "./hooks/useDrawerState";
+import { useDrawerState } from '@/features/sessions/hooks';
 import { createDrawerStyles, createOverlayStyles } from "./utils/drawerStyles";
 
 /**

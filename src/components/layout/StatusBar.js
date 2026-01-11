@@ -15,8 +15,7 @@ import MenuToggleButton from "./MenuToggleButton";
 import ActionButtons from "./ActionButtons";
 import ConnectionStatusIndicator from "./ConnectionStatusIndicator";
 import SessionDropdown from "./SessionDropdown";
-import { useConnectionStatusDisplay } from "./hooks/useConnectionStatusDisplay";
-import { useSessionManagement } from "./hooks/useSessionManagement";
+import { useConnectionStatusDisplay, useSessionManagement } from '@/features/sessions/hooks';
 import Svg, { Path } from "react-native-svg";
 
 /**
