@@ -282,9 +282,8 @@ const EventItem = ({ item, theme, markdownStyles, onCopy, showToast }) => {
   const debugId = item.messageId ? `${item.messageId.slice(-8)}` : item.id?.slice(-8) || 'no-id';
 
   // Debug metadata - shows role, type, source for each message
-  const debugText = __DEV__
-    ? `${debugId} | role:${item.role ?? 'UNDEF'} | type:${item.type} | src:${item.source || '?'}`
-    : null;
+  // Always show for development visibility
+  const debugText = `${debugId} | role:${item.role ?? 'UNDEF'} | type:${item.type} | src:${item.source || '?'}`;
 
   return (
     <View

@@ -105,8 +105,8 @@ export const classifyMessage = (item, currentMode = 'build') => {
         return null;
       }
 
-      // Classify based on role
-      const role = item.payload?.properties?.info?.role;
+      // Classify based on role - check both preprocessed (item.role) and raw (payload) formats
+      const role = item.payload?.properties?.info?.role || item.role || null;
       const messageType = role === 'user' ? 'sent' : 'loaded_message';
 
       return {
@@ -118,8 +118,9 @@ export const classifyMessage = (item, currentMode = 'build') => {
         icon: role === 'user' ? 'User' : 'Check',
         sessionId: sessionId,
         payloadType: payloadType,
-        messageId: item.payload?.properties?.info?.id || null,
+        messageId: item.payload?.properties?.info?.id || item.messageId || null,
         role: role,
+        source: item.source || 'historical', // Preserve source from preprocessed messages
         mode: (currentMode !== null ? currentMode : item.info?.mode) || 'build',
       };
     } catch (error) {
@@ -284,8 +285,9 @@ export const classifyMessage = (item, currentMode = 'build') => {
     const textParts = item.parts.filter(part => part && part.type === 'text');
     if (textParts.length > 0) {
       const textContent = textParts.map(part => part.text || '').join('\n');
-      const role = item.info?.role;
-      const messageType = role === 'user' ? 'sent' : 'parts_message';
+      // Check both preprocessed (item.role) and raw (payload) formats
+      const role = item.info?.role || item.role || null;
+      const messageType = role === 'user' ? 'sent' : 'loaded_message';
 
       return {
         type: messageType,
@@ -296,8 +298,9 @@ export const classifyMessage = (item, currentMode = 'build') => {
         icon: role === 'user' ? 'User' : 'Check',
         sessionId: sessionId,
         payloadType: payloadType,
-        messageId: item.info?.id || null,
+        messageId: item.info?.id || item.messageId || null,
         role: role,
+        source: item.source || 'sse', // Preserve source from preprocessed messages
         mode: item.info?.mode || item.info?.agent || 'build',
       };
     }
