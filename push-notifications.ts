@@ -237,8 +237,8 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
     if (!tunnelInfo) {
       throw new Error("Failed to establish tunnel");
     }
-    
-    await displayQR(tunnelInfo.url);
+
+    displayQR(tunnelInfo);
 
     return {
       event: async ({ event }) => {
