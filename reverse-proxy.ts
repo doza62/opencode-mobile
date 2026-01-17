@@ -1,13 +1,15 @@
-import http from 'http';
-import { request as httpRequest } from 'http';
+import http, { request as httpRequest } from "http";
 
-const PROXY_PORT = 4098;
-const TOKEN_API_PORT = 4097;
-const SERVER_PORT = 4096;
+export interface ProxyConfig {
+  proxyPort: number;
+  serverPort: number;
+  tokenApiPort: number;
+}
 
 let serverStarted = false;
+let server: http.Server | null = null;
 
-export function startProxy(): Promise<void> {
+export function startProxy(config: ProxyConfig): Promise<void> {
   return new Promise((resolve, reject) => {
     if (serverStarted) {
       console.log("[Proxy] Proxy already running");
@@ -15,22 +17,22 @@ export function startProxy(): Promise<void> {
       return;
     }
 
-    const server = http.createServer((clientReq, clientRes) => {
-      const url = clientReq.url || '';
+    server = http.createServer((clientReq, clientRes) => {
+      const url = clientReq.url || "";
 
-      const targetPort = url.startsWith('/push-token')
-        ? TOKEN_API_PORT
-        : SERVER_PORT;
+      const targetPort = url.startsWith("/push-token")
+        ? config.tokenApiPort
+        : config.serverPort;
 
       const options = {
-        hostname: '127.0.0.1',
+        hostname: "127.0.0.1",
         port: targetPort,
         path: url,
         method: clientReq.method,
         headers: {
           ...clientReq.headers,
-          'x-forwarded-for': clientReq.socket.remoteAddress,
-          'x-forwarded-host': clientReq.headers.host,
+          "x-forwarded-for": clientReq.socket.remoteAddress,
+          "x-forwarded-host": clientReq.headers.host,
         },
       };
 
@@ -39,38 +41,48 @@ export function startProxy(): Promise<void> {
         proxyRes.pipe(clientRes);
       });
 
-      proxyReq.on('error', (err) => {
-        console.error('[Proxy] Error forwarding request:', err.message);
+      proxyReq.on("error", (err: any) => {
+        console.error("[Proxy] Error forwarding request:", err.message);
         if (!clientRes.headersSent) {
-          clientRes.writeHead(502, { 'Content-Type': 'text/plain' });
-          clientRes.end('Bad Gateway');
+          clientRes.writeHead(502, { "Content-Type": "text/plain" });
+          clientRes.end("Bad Gateway");
         }
       });
 
       clientReq.pipe(proxyReq);
     });
 
-    server.on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        console.log('[Proxy] Port already in use - proxy likely already running');
+    server.on("error", (err: any) => {
+      if (err.code === "EADDRINUSE") {
+        console.log("[Proxy] Port already in use - proxy likely already running");
         serverStarted = true;
         resolve();
       } else {
-        console.error('[Proxy] Failed to start:', err.message);
+        console.error("[Proxy] Failed to start:", err.message);
         reject(err);
       }
     });
 
-    server.listen(PROXY_PORT, () => {
+    server.listen(config.proxyPort, () => {
       serverStarted = true;
-      console.log(`[Proxy] Running on port ${PROXY_PORT}`);
-      console.log(`[Proxy] /push-token/* → Port ${TOKEN_API_PORT}`);
-      console.log(`[Proxy] /* → Port ${SERVER_PORT}`);
+      console.log(`[Proxy] Running on port ${config.proxyPort}`);
+      console.log(`[Proxy] /push-token/* → Port ${config.tokenApiPort}`);
+      console.log(`[Proxy] /* → Port ${config.serverPort}`);
       resolve();
     });
   });
 }
 
-export function getProxyPort(): number {
-  return PROXY_PORT;
+export function stopProxy(): void {
+  if (server) {
+    server.close(() => {
+      console.log("[Proxy] Server stopped");
+    });
+    server = null;
+    serverStarted = false;
+  }
+}
+
+export function isProxyRunning(): boolean {
+  return serverStarted;
 }

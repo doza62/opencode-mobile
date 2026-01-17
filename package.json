@@ -1,22 +1,61 @@
 {
-  "name": "plugin",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "name": "opencode-mobile",
+  "version": "1.0.1",
+  "description": "Mobile push notification plugin for OpenCode - enables push notifications via Expo for mobile devices",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
-  "keywords": [],
+  "files": [
+    "dist",
+    "push-notifications.ts"
+  ],
+  "keywords": [
+    "opencode",
+    "plugin",
+    "push-notifications",
+    "mobile",
+    "expo"
+  ],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/doza62/opencode-mobile"
+  },
+  "homepage": "https://github.com/doza62/opencode-mobile#readme",
+  "bugs": {
+    "url": "https://github.com/doza62/opencode-mobile/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
+    "@ngrok/ngrok": "^1.7.0",
+    "@opencode-ai/plugin": "^1.1.12",
+    "cloudflared": "^0.1.1",
+    "cloudflared-tunnel": "^1.0.3",
+    "expo": "^54.0.31",
+    "localtunnel": "^2.0.2",
     "ngrok": "^5.0.0-beta.2",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
+    "@types/node": "^22.13.9",
     "@types/qrcode": "^1.5.6",
-    "@types/qrcode-terminal": "^0.12.2"
+    "@types/qrcode-terminal": "^0.12.2",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
   }
 }

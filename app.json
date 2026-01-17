@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "2acd63e2-d8ab-4f1d-8270-f4fd80a3667b"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.doza62.opencodemobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

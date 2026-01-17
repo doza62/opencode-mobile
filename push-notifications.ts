@@ -1,402 +1,292 @@
-import type { Plugin } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
-import { startProxy, getProxyPort } from "./reverse-proxy";
-import {
-  startTunnel,
-  stopTunnel,
-  getServerUrl,
-  displayQRCode,
-  gracefulShutdown,
-} from "./tunnel-manager";
+import * as net from "net";
+
+declare const Bun: any;
+
+import type { Plugin } from "@opencode-ai/plugin";
+import { startTunnel, stopTunnel, displayQRCode as displayQR, getTunnelDetails } from "./src/tunnel";
+import { getNextAvailablePort } from "./src/utils/port";
+import type { PushToken, Notification, NotificationEvent, PluginContext } from "./src/push";
+import { loadTokens, saveTokens, truncate } from "./src/push/token-store";
+import { formatNotification } from "./src/push/formatter";
+import { sendPush } from "./src/push/sender";
+
+import { createLogger, configureLogger } from "./sdk-logger";
 
 const CONFIG_DIR = path.join(process.env.HOME || "", ".config/opencode");
+
+// Simple console logging (no client.log dependency)
+const logger = createLogger("PushPlugin");
 const TOKEN_FILE = path.join(CONFIG_DIR, "push-tokens.json");
-const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const TOKEN_API_PORT = 4097;
-const SERVER_PORT = 4096;
-const PROXY_PORT = getProxyPort();
 
-let proxyStarted = false;
-let tunnelStarted = false;
+let tokenServerStarted = false;
+let pluginInitialized = false;
+let bunServer: any = null;
+let bunServerPort: number | null = null;
 
-interface PushToken {
-  token: string;
-  platform: "ios" | "android";
-  deviceId: string;
-  registeredAt: string;
-}
-
-interface Notification {
-  title: string;
-  body: string;
-  data: Record<string, any>;
-}
-
-function loadTokens(): PushToken[] {
-  try {
-    if (fs.existsSync(TOKEN_FILE)) {
-      return JSON.parse(fs.readFileSync(TOKEN_FILE, "utf-8"));
-    }
-  } catch (e) {
-    console.error("[PushPlugin] Load error:", e);
-  }
-  return [];
-}
-
-function saveTokens(tokens: PushToken[]): void {
-  const dir = path.dirname(TOKEN_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-}
-
-const truncate = (text: string | undefined, max: number): string => {
-  if (!text) return "";
-  const cleaned = text.replace(/\n/g, " ").trim();
-  return cleaned.length <= max
-    ? cleaned
-    : cleaned.substring(0, max - 3) + "...";
-};
-
-function extractProjectPath(event: any, ctx: any): string | null {
-  const { type, properties } = event;
-
-  switch (type) {
-    case "session.updated":
-      return properties?.info?.directory || null;
-
-    case "message.updated":
-      return properties?.info?.path?.cwd || properties?.info?.path?.root || null;
-
-    case "session.idle":
-    case "session.error":
-    case "permission.updated":
-      return ctx?.directory || ctx?.worktree || null;
-
-    default:
-      return (
-        properties?.projectPath ||
-        properties?.directory ||
-        properties?.info?.directory ||
-        properties?.info?.path?.cwd ||
-        ctx?.directory ||
-        ctx?.worktree ||
-        null
-      );
-  }
-}
-
-function extractSessionId(event: any): string | null {
-  const { properties } = event;
-  return (
-    properties?.sessionId ||
-    properties?.sessionID ||
-    event?.sessionId ||
-    event?.sessionID ||
-    properties?.info?.sessionID ||
-    properties?.info?.id ||
-    null
-  );
-}
-
-function formatNotification(
-  event: any,
-  serverUrl: string,
-  ctx?: any,
-): Notification | null {
-  const { type, properties } = event;
-
-  console.log("[PushPlugin] === EVENT RECEIVED ===");
-  console.log("[PushPlugin] Event type:", type);
-
-  const projectPath = extractProjectPath(event, ctx);
-  const sessionId = extractSessionId(event);
-
-  console.log("[PushPlugin] Extracted projectPath:", projectPath || "undefined/empty");
-  console.log("[PushPlugin] Extracted sessionId:", sessionId || "undefined/empty");
-  console.log("[PushPlugin] ServerUrl:", serverUrl);
-
-  if (type === "message.updated" && properties?.info) {
-    const info = properties.info;
-    console.log("[PushPlugin] Message info:", JSON.stringify({
-      id: info.id,
-      role: info.role,
-      finish: info.finish,
-      path: info.path,
-      tokens: info.tokens
-    }, null, 2));
-  }
-
-  console.log("[PushPlugin] === END EVENT DEBUG ===\n");
-
-  const baseData = {
-    type,
-    serverUrl,
-    projectPath,
-    sessionId,
-  };
-
-  switch (type) {
-    case "session.idle":
-      return {
-        title: "✅ Session Complete",
-        body: truncate(
-          properties?.summary || properties?.title || "Task completed",
-          100,
-        ),
-        data: { ...baseData, messageId: properties?.messageId },
-      };
-    case "session.error":
-      return {
-        title: "❌ Session Error",
-        body: truncate(
-          properties?.error || properties?.message || "An error occurred",
-          100,
-        ),
-        data: baseData,
-      };
-    case "permission.updated":
-      return {
-        title: "🔐 Permission Required",
-        body: `Approve ${properties?.tool || "action"} ${properties?.type || "execute"}?`,
-        data: { ...baseData, permissionId: properties?.permissionId },
-      };
-    default:
-      return null;
-  }
-}
-
-async function sendPush(notification: Notification): Promise<void> {
-  const tokens = loadTokens();
-  if (tokens.length === 0) return;
-
-  console.log("[PushPlugin] Sending notification:", JSON.stringify(notification, null, 2));
-
-  const messages = tokens.map(({ token }) => ({
-    to: token,
-    sound: "default",
-    title: notification.title,
-    body: notification.body,
-    data: notification.data,
-    priority: "high",
-  }));
-
-  console.log("[PushPlugin] Push payload to Expo:", JSON.stringify(messages, null, 2));
-
-  try {
-    const res = await fetch(EXPO_PUSH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(messages),
-    });
-
-    if (!res.ok) {
-      console.error("[PushPlugin] Expo error:", res.status);
-      return;
-    }
-
-    const result = await res.json();
-
-    const invalid: string[] = [];
-    result.data?.forEach((item: any, i: number) => {
-      if (
-        item.status === "error" &&
-        ["DeviceNotRegistered", "InvalidCredentials"].includes(
-          item.details?.error,
-        )
-      ) {
-        invalid.push(tokens[i].token);
-      }
-    });
-
-    if (invalid.length > 0) {
-      saveTokens(tokens.filter((t) => !invalid.includes(t.token)));
-      console.log(`[PushPlugin] Removed ${invalid.length} invalid token(s)`);
-    }
-
-    console.log(`[PushPlugin] Sent to ${tokens.length} device(s)`);
-  } catch (e) {
-    console.error("[PushPlugin] Send error:", e);
-  }
-}
-
-async function startTokenServer(serverUrl: string): Promise<void> {
-  if (proxyStarted) {
-    console.log("[PushPlugin] Token server already running");
-    return;
-  }
+async function startTokenServer(
+  openCodeUrl: string,
+  port: number,
+): Promise<void> {
+  if (tokenServerStarted) return;
 
   const cors = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, x-opencode-directory",
   };
 
-  try {
-    Bun.serve({
-      port: TOKEN_API_PORT,
-      hostname: "0.0.0.0",
-      async fetch(req) {
-        const url = new URL(req.url);
-        // console.log(
-        //   `[PushPlugin] <- ${req.method} ${url.pathname} [origin: ${req.headers.get("origin") || "none"}]`,
-        // );
+  bunServer = Bun.serve({
+    port: port,
+    hostname: "0.0.0.0",
+    idleTimeout: 0, // Disable timeout for SSE connections
+    async fetch(req: Request) {
+      const url = new URL(req.url);
+      if (req.method === "OPTIONS")
+        return new Response(null, { status: 204, headers: cors });
 
-        if (req.method === "OPTIONS") {
-          console.log("[PushPlugin] -> 204 CORS preflight OK");
-          return new Response(null, { status: 204, headers: cors });
-        }
-
-        if (url.pathname === "/push-token" && req.method === "POST") {
-          console.log(
-            `[PushPlugin] <- ${req.method} ${url.pathname} [origin: ${req.headers.get("origin") || "none"}]`,
-          );
-          const { token, platform, deviceId } = await req.json();
-          if (!token || !deviceId) {
-            return Response.json(
-              { error: "Missing fields" },
-              { status: 400, headers: cors },
-            );
-          }
-
-          const tokens = loadTokens();
-          const idx = tokens.findIndex((t) => t.deviceId === deviceId);
-          const newToken = {
-            token,
-            platform: platform || "ios",
-            deviceId,
-            registeredAt: new Date().toISOString(),
-          };
-
-          if (idx >= 0) tokens[idx] = newToken;
-          else tokens.push(newToken);
-
-          saveTokens(tokens);
-          console.log(`[PushPlugin] Registered device ${deviceId}`);
-          return Response.json({ success: true }, { headers: cors });
-        }
-
-        if (url.pathname === "/push-token" && req.method === "DELETE") {
-          const { deviceId } = await req.json();
-          saveTokens(loadTokens().filter((t) => t.deviceId !== deviceId));
-          return Response.json({ success: true }, { headers: cors });
-        }
-
-        if (url.pathname === "/push-token" && req.method === "GET") {
-          const tokens = loadTokens();
-          return Response.json({ count: tokens.length }, { headers: cors });
-        }
-
-        if (url.pathname === "/push-token/test" && req.method === "POST") {
-          await sendPush({
-            title: "🧪 Test",
-            body: "Push notifications working!",
-            data: { type: "test", serverUrl },
+      if (url.pathname === "/push-token" && req.method === "POST") {
+        const body = (await req.json()) as {
+          token?: string;
+          platform?: string;
+          deviceId?: string;
+        };
+        const { token, platform, deviceId } = body;
+        if (!token || !deviceId)
+          return new Response(JSON.stringify({ error: "Missing fields" }), {
+            status: 400,
+            headers: cors,
           });
-          return Response.json({ success: true }, { headers: cors });
+
+        // Validate platform field
+        const validPlatform = (platform && (platform === "ios" || platform === "android")) 
+          ? platform 
+          : "ios";
+
+        const tokens = loadTokens();
+        const idx = tokens.findIndex((t) => t.deviceId === deviceId);
+        const newToken: PushToken = {
+          token,
+          platform: validPlatform,
+          deviceId,
+          registeredAt: new Date().toISOString(),
+        };
+        if (idx >= 0) tokens[idx] = newToken;
+        else tokens.push(newToken);
+        saveTokens(tokens);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: cors,
+        });
+      }
+
+      if (url.pathname === "/push-token" && req.method === "DELETE") {
+        const body = (await req.json()) as { deviceId?: string };
+        const { deviceId } = body;
+        saveTokens(loadTokens().filter((t) => t.deviceId !== deviceId));
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: cors,
+        });
+      }
+
+      if (url.pathname === "/push-token" && req.method === "GET") {
+        return new Response(JSON.stringify({ count: loadTokens().length }), {
+          status: 200,
+          headers: cors,
+        });
+      }
+
+      if (url.pathname === "/push-token/test" && req.method === "POST") {
+        await sendPush({
+          title: "Test",
+          body: "Push notifications working!",
+          data: { type: "test", serverUrl: openCodeUrl },
+        });
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: cors,
+        });
+      }
+
+      // Return tunnel information
+      if (url.pathname === "/tunnel" && req.method === "GET") {
+        const details = getTunnelDetails();
+        return new Response(JSON.stringify(details, null, 2), {
+          status: 200,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      // Proxy everything else directly to OpenCode server (transparent)
+      const pathname = url.pathname + url.search;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const proxyReq = new Request(`${openCodeUrl}${pathname}`, {
+          method: req.method,
+          headers: req.headers,
+          body: req.body,
+          redirect: "follow",
+          signal: controller.signal,
+        });
+        try {
+          return await fetch(proxyReq);
+        } catch (e: any) {
+          if (e.name === 'AbortError') {
+            return new Response("Gateway timeout", { status: 504, headers: cors });
+          }
+          throw e;
+        } finally {
+          clearTimeout(timeoutId);
         }
+      } catch (e) {
+        logger.error("Proxy error:", e);
+        return new Response("Proxy error", { status: 502, headers: cors });
+      }
+    },
+  });
 
-        return new Response("Not Found", { status: 404, headers: cors });
-      },
-    });
+  tokenServerStarted = true;
+}
 
-    proxyStarted = true;
-    console.log(`[PushPlugin] Token API on port ${TOKEN_API_PORT}`);
-  } catch (e: any) {
-    if (e.message?.includes("in use")) {
-      console.log(
-        "[PushPlugin] Port 4097 already in use - token server likely already running",
-      );
-      proxyStarted = true;
-    } else {
-      console.error("[PushPlugin] Failed to start token server:", e);
-    }
+
+function stopAll(): void {
+  logger.info("Shutting down...");
+
+  stopTunnel();
+  if (bunServer) {
+    logger.info("Stopping Bun server...");
+    bunServer.stop();
+    bunServer = null;
   }
+  tokenServerStarted = false;
+  logger.info("Shutdown complete");
 }
 
 export const PushNotificationPlugin: Plugin = async (ctx) => {
-  console.log('[PushPlugin] Starting OpenCode Mobile Connection...');
-  console.log('='.repeat(60));
+  if (pluginInitialized) {
+    return { event: async ({ event }) => {} };
+  }
+  pluginInitialized = true;
 
-  let serverUrl: string | null = null;
+  // Skip tunnel setup in server mode (no --serve flag)
+  const processArgs = process.argv.slice(2).join(' ');
+  const hasServeFlag = processArgs.includes('--serve') || processArgs.includes('serve');
+  
+  if (!hasServeFlag) {
+    return {
+      event: async ({ event }) => {},
+    };
+  }
+
+  const serverPort = parseInt(String((ctx as any).serverUrl?.port || 4096), 10);
+  logger.info(`App started. Creating tunnel on port ${serverPort}`);
+
+  // Test logging levels (dev-only verbose output)
+  logger.dev("Detailed development info - only appears in dev mode");
+  logger.info("Standard operational message - appears in both dev and prod");
+  logger.warn("Non-critical issue warning");
+  logger.error("Critical failure message");
+
+  // Get server port from ctx, find next available for push-token
+  const pushTokenPort = await getNextAvailablePort(serverPort + 1);
+  bunServerPort = pushTokenPort;
+  const openCodeUrl = `http://127.0.0.1:${serverPort}`;
+  
+  logger.info(`Token API: http://127.0.0.1:${pushTokenPort} → ${openCodeUrl}`);
 
   try {
-    // Step 1: Start the reverse proxy
-    console.log('[PushPlugin] Step 1/3: Starting reverse proxy...');
-    await startProxy();
-    console.log(`[PushPlugin] Proxy running on port ${PROXY_PORT}`);
-
-    // Step 2: Start ngrok tunnel to proxy
-    console.log('[PushPlugin] Step 2/3: Starting ngrok tunnel...');
-    const tunnelInfo = await startTunnel({
-      port: PROXY_PORT,
-      authToken: process.env.NGROK_AUTHTOKEN, // Use isolated credentials if available
-      region: process.env.NGROK_REGION || 'us',
-    });
-
-    serverUrl = tunnelInfo.url;
-    console.log(`[PushPlugin] Tunnel URL: ${serverUrl}`);
-
-    // Step 3: Display QR code for mobile connection
-    if (!serverUrl) {
-      throw new Error('Tunnel established but no URL returned');
+    await startTokenServer(openCodeUrl, pushTokenPort);
+    
+    let tunnelInfo: any;
+    let ngrokFailed = false;
+    
+    try {
+      // Create tunnel directly to OpenCode server (transparent proxy)
+      tunnelInfo = await startTunnel({ port: serverPort, provider: "ngrok" });
+    } catch (ngrokError: any) {
+      const errorMsg = ngrokError.message.toLowerCase();
+      const isAuthIssue = errorMsg.includes("invalid tunnel configuration") || 
+                          errorMsg.includes("authtoken") ||
+                          errorMsg.includes("authentication") ||
+                          errorMsg.includes("auth token") ||
+                          errorMsg.includes("session failed") ||
+                          errorMsg.includes("connect to api.ngrok.com");
+      
+      if (isAuthIssue) {
+        logger.info("Ngrok needs authtoken (ERR_NGROK_4018)");
+        logger.info("Skipping ngrok setup - will use fallback tunnels");
+        ngrokFailed = true;
+      } else {
+        ngrokFailed = true;
+      }
+      
+      if (ngrokFailed) {
+        logger.info("Trying localtunnel...");
+        try {
+          tunnelInfo = await startTunnel({ port: serverPort, provider: "localtunnel" });
+        } catch (localtunnelError: any) {
+          logger.error("Localtunnel failed:", localtunnelError.message);
+          throw new Error("All tunnel providers failed");
+        }
+      }
     }
-
-    console.log('[PushPlugin] Step 3/3: Generating connection QR code...');
-    await displayQRCode(serverUrl);
-
-    console.log('='.repeat(60));
-    console.log('[PushPlugin] ✅ Mobile connection ready!');
-    console.log('[PushPlugin] Scan the QR code or use the URL above to connect.');
-    console.log('='.repeat(60));
-
-    // Start the token API server
-    await startTokenServer(serverUrl);
+    
+    if (!tunnelInfo) {
+      throw new Error("Failed to establish tunnel");
+    }
+    
+    await displayQR(tunnelInfo.url);
 
     return {
       event: async ({ event }) => {
-        const notification = formatNotification(event, serverUrl!, ctx);
-        if (notification) await sendPush(notification);
+        // Format notification from event
+        const notification = formatNotification(event, tunnelInfo.url, ctx);
+        
+        if (!notification) {
+          // No notification needed for this event type
+          return;
+        }
+
+        // Log the raw event that triggered this push
+        const eventAny = event as any;
+        logger.info("Raw event received", {
+          type: event.type,
+          sessionID: eventAny.sessionID || eventAny.sessionId,
+          timestamp: eventAny.timestamp,
+          properties: event.properties
+        });
+
+        // Log the formatted notification
+        logger.info("Sending push notification", {
+          title: notification.title,
+          body: notification.body,
+          sessionId: notification.data?.sessionId,
+          type: notification.data?.type
+        });
+
+        // Send the push notification
+        await sendPush(notification);
+        
+        logger.dev("Push notification sent successfully");
       },
     };
   } catch (error: any) {
-    console.error('='.repeat(60));
-    console.error('[PushPlugin] ❌ FAILED to establish mobile connection');
-    console.error('[PushPlugin] Error:', error.message);
-    console.error('='.repeat(60));
-
-    // Provide helpful guidance based on error type
-    if (error.message?.includes('authentication failed') || error.message?.includes('payment') || error.message?.includes('suspended')) {
-      console.error('[PushPlugin] 💡 Ngrok authentication issue detected.');
-      console.error('[PushPlugin]    The global ngrok installation has billing/payment problems.');
-      console.error('[PushPlugin]');
-      console.error('[PushPlugin] OPTIONS:');
-      console.error('[PushPlugin] 1. Fix ngrok billing: https://dashboard.ngrok.com/billing');
-      console.error('[PushPlugin] 2. Use isolated credentials: export NGROK_AUTHTOKEN=your_token');
-      console.error('[PushPlugin] 3. Use a different tunnel service (cloudflared, localtunnel, etc.)');
-    } else {
-      console.error('[PushPlugin] 💡 Could not establish ngrok tunnel.');
-      console.error('[PushPlugin]    Check your internet connection and ngrok installation.');
-    }
-
-    console.error('='.repeat(60));
-    console.log('[PushPlugin] ℹ️  Mobile connection FAILED - continuing without it.');
-    console.log('[PushPlugin] ℹ️  Push notifications will not be available, but core functionality works.');
-    console.log('[PushPlugin] ℹ️  To retry mobile connection, restart the server.');
-    console.log('='.repeat(60));
-
-    // Continue without mobile connection - server still works
-    // Use a placeholder URL that won't actually work for push, but allows graceful degradation
-    const fallbackUrl = "http://localhost:4096";
-    await startTokenServer(fallbackUrl);
-
-    return {
-      event: async ({ event }) => {
-        // Mobile notifications won't work, but we can still log
-        console.log('[PushPlugin] Event received (mobile notifications unavailable):', event.type);
-      },
-    };
+    logger.error("Failed:", error.message);
+    return { event: async ({ event }) => {} };
   }
 };
+
+process.on("SIGTERM", () => {
+  stopAll();
+});
+process.on("SIGINT", () => {
+  stopAll();
+});
+process.on("SIGHUP", () => {
+  stopAll();
+});
 
 export default PushNotificationPlugin;
