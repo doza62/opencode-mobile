@@ -14,8 +14,21 @@ let currentTunnel: TunnelInfo | null = null;
  * Start a tunnel with the specified provider
  */
 export async function startTunnel(config: TunnelConfig): Promise<TunnelInfo> {
+  // Validate that we have a proper TunnelConfig object
+  if (!config || typeof config !== 'object') {
+    console.log("[Tunnel] startTunnel called with invalid config type:", typeof config);
+    throw new Error("Invalid tunnel config: config must be an object");
+  }
+
+  // Check if this looks like the OpenCode client context (has 'client' property)
+  if ('client' in config) {
+    console.log("[Tunnel] startTunnel called with OpenCode client context instead of TunnelConfig");
+    console.log("[Tunnel] This indicates a plugin initialization issue");
+    throw new Error("Invalid tunnel config: received OpenCode client context");
+  }
+
   if (!config?.port) {
-    console.log("[Tunnel] startTunnel called with invalid config:", JSON.stringify(config));
+    console.log("[Tunnel] startTunnel called with invalid config:", JSON.stringify(config).substring(0, 200));
     throw new Error("Invalid tunnel config: port is required");
   }
   
@@ -65,11 +78,25 @@ export async function stopTunnel(): Promise<void> {
  * Display QR code for tunnel URL
  */
 export async function displayQR(tunnelInfo: TunnelInfo): Promise<void> {
+  // Validate that we have a proper TunnelInfo object, not the OpenCode client context
+  if (!tunnelInfo || typeof tunnelInfo !== 'object') {
+    console.log("[Tunnel] displayQR called with invalid tunnelInfo type:", typeof tunnelInfo);
+    return;
+  }
+
+  // Check if this looks like the OpenCode client context (has 'client' property)
+  if ('client' in tunnelInfo) {
+    console.log("[Tunnel] displayQR called with OpenCode client context instead of TunnelInfo");
+    console.log("[Tunnel] This indicates a plugin initialization issue");
+    return;
+  }
+
   if (!tunnelInfo?.url) {
-    console.log("[Tunnel] displayQR called with invalid tunnelInfo:", JSON.stringify(tunnelInfo));
+    console.log("[Tunnel] displayQR called with invalid tunnelInfo:", JSON.stringify(tunnelInfo).substring(0, 200));
     console.log("[Tunnel] Stack:", new Error().stack?.split('\n').slice(2, 6).join('\n'));
     return;
   }
+
   await displayQRCode(tunnelInfo.url);
 }
 
