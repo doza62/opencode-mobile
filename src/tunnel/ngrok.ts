@@ -5,7 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
-import ngrok from "@ngrok/ngrok";
+import * as ngrok from "@ngrok/ngrok";
 import type { TunnelConfig, TunnelInfo, NgrokDiagnostics } from "./types";
 
 let ngrokInstance: any = null;
@@ -202,8 +202,29 @@ export async function ensureNgrokReady(): Promise<{ ready: boolean; authtoken: s
     return { ready: !!authtoken, authtoken };
   }
 
+  // Extract authtoken from config for SDK usage
+  let authtokenValue: string | null = null;
+  if (diagnostics.configPath) {
+    try {
+      const { readFileSync } = require("fs");
+      const configContent = readFileSync(diagnostics.configPath, "utf-8");
+      
+      // Check for v3 format first (current standard)
+      const v3Match = configContent.match(/agent:\s*\n\s*authtoken:\s*(.+)/);
+      // Fallback to v2 format (deprecated but still supported)
+      const v2Match = configContent.match(/authtoken:\s*(.+)/);
+      
+      const token = v3Match?.[1]?.trim() || v2Match?.[1]?.trim();
+      if (token && token.length > 10) {
+        authtokenValue = token;
+      }
+    } catch (e) {
+      // Failed to read authtoken, continue without it
+    }
+  }
+  
   console.log("[Diagnostics] Ngrok appears configured, attempting connection...");
-  return { ready: true, authtoken: null };
+  return { ready: true, authtoken: authtokenValue };
 }
 
 /**
@@ -266,60 +287,73 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
 
   // Try multiple strategies if one fails
   const strategies = [
-    // Strategy 1: Basic ngrok.forward()
+    // Strategy 1: Basic ngrok.forward() with direct authtoken
     async () => {
-      console.log("[Tunnel] Strategy 1: ngrok.forward()...");
+      console.log("[Tunnel] Strategy 1: ngrok.forward() with direct token...");
       
       const token = config.authToken || authtoken;
-      if (token && typeof token === "string") {
-        console.log(`[Tunnel] Token: ${token.substring(0, 8)}...`);
+      if (!token || typeof token !== "string") {
+        throw new Error("No valid authtoken available for Strategy 1");
       }
       
-      const options: any = { addr: config.port };
-      if (token && typeof token === "string") options.authtoken = token;
+      console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
       
-      const listener = await ngrok.forward(options);
+      const listener = await ngrok.forward({
+        addr: config.port,
+        authtoken: token,
+      });
+      
       console.log(`[Tunnel] URL: ${listener.url()}`);
       return listener.url();
     },
     
-    // Strategy 2: With session metadata
+    // Strategy 2: With session metadata and SessionBuilder
     async () => {
-      console.log("[Tunnel] Strategy 2: + metadata...");
+      console.log("[Tunnel] Strategy 2: SessionBuilder + metadata...");
       await cleanupNgrok();
       await new Promise((resolve) => setTimeout(resolve, 2000));
       
       const token = config.authToken || authtoken;
-      if (token && typeof token === "string") {
-        console.log(`[Tunnel] Token: ${token.substring(0, 8)}...`);
+      if (!token || typeof token !== "string") {
+        throw new Error("No valid authtoken available for Strategy 2");
       }
       
-      const options: any = { 
-        addr: config.port,
-        session_metadata: `opencode-${Date.now()}`,
-      };
-      if (token && typeof token === "string") options.authtoken = token;
+      console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
       
-      const listener = await ngrok.forward(options);
+      // Use SessionBuilder for more control
+      const session = await new ngrok.SessionBuilder()
+        .authtoken(token)
+        .metadata(`opencode-${Date.now()}`)
+        .connect();
+      
+      const listener = await session.httpEndpoint()
+        .listenAndForward(`localhost:${config.port}`);
+      
       console.log(`[Tunnel] URL: ${listener.url()}`);
       return listener.url();
     },
     
-    // Strategy 3: Clean session
+    // Strategy 3: Clean session with SessionBuilder
     async () => {
-      console.log("[Tunnel] Strategy 3: clean session...");
+      console.log("[Tunnel] Strategy 3: clean session with SessionBuilder...");
       await cleanupNgrok();
       await new Promise((resolve) => setTimeout(resolve, 3000));
       
       const token = config.authToken || authtoken;
-      if (token && typeof token === "string") {
-        console.log(`[Tunnel] Token: ${token.substring(0, 8)}...`);
+      if (!token || typeof token !== "string") {
+        throw new Error("No valid authtoken available for Strategy 3");
       }
       
-      const options: any = { addr: config.port };
-      if (token && typeof token === "string") options.authtoken = token;
+      console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
       
-      const listener = await ngrok.forward(options);
+      // Create a completely fresh session with direct token
+      const session = await new ngrok.SessionBuilder()
+        .authtoken(token)
+        .connect();
+      
+      const listener = await session.httpEndpoint()
+        .listenAndForward(`localhost:${config.port}`);
+      
       console.log(`[Tunnel] URL: ${listener.url()}`);
       return listener.url();
     },
