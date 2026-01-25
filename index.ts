@@ -433,6 +433,7 @@ async function startServer(port: number, openCodePort: number): Promise<boolean>
 }
 
 export const PushNotificationPlugin: Plugin = async (ctx) => {
+  console.log("[opencode-mobile] Plugin init called");
   debugLog("[PushPlugin][Mobile] Initialized");
 
   await ensureMobileCommandExists(ctx);
