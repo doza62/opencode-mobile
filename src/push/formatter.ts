@@ -5,6 +5,13 @@
 import type { Notification, NotificationEvent, PluginContext } from "./types";
 import { truncate } from "./token-store";
 
+const DEBUG_ENABLED = process.env.OPENCODE_MOBILE_DEBUG === "1";
+const debugLog = (...args: unknown[]): void => {
+  if (DEBUG_ENABLED) {
+    console.log(...args);
+  }
+};
+
 interface EventProperties {
   // Info object
   info?: {
@@ -38,6 +45,9 @@ interface EventProperties {
   tool?: string;
   type?: string;
   permissionId?: string;
+  id?: string;
+  permission?: string;
+  patterns?: string[];
 }
 
 /**
@@ -56,7 +66,15 @@ export function extractProjectPath(event: NotificationEvent, ctx?: PluginContext
     case "session.idle":
     case "session.error":
     case "permission.updated":
-      return ctx?.directory || ctx?.worktree || null;
+    case "permission.asked":
+      return (
+        properties?.directory ||
+        properties?.projectPath ||
+        event?.directory ||
+        ctx?.directory ||
+        ctx?.worktree ||
+        null
+      );
     default:
       return (
         properties?.projectPath ||
@@ -100,6 +118,18 @@ export function isChildSession(event: NotificationEvent): boolean {
     properties?.info?.parentSessionId ||
     properties?.info?.parentId
   );
+}
+
+function extractSessionTitle(properties: EventProperties): string | null {
+  const title = properties?.title || properties?.sessionTitle;
+  if (typeof title !== "string") return null;
+  const trimmed = title.trim();
+  return trimmed ? trimmed : null;
+}
+
+function hasBracketTag(text: string): boolean {
+  // Matches things like "[foo]" anywhere in the title.
+  return /\[[^\]]+\]/.test(text);
 }
 
 /**
@@ -149,30 +179,37 @@ export function formatNotification(
   const projectPath = extractProjectPath(event, ctx);
   const sessionId = extractSessionId(event);
 
-  const baseData = { type, serverUrl, projectPath, sessionId };
-
-  if (type === "session.idle") {
-    if (isChildSession(event)) {
-      return null;
-    }
+  const sessionTitleForFiltering = extractSessionTitle(properties);
+  if (isChildSession(event)) {
+    return null;
   }
+
+  if (sessionTitleForFiltering && hasBracketTag(sessionTitleForFiltering)) {
+    return null;
+  }
+
+  const baseData = { type, serverUrl, projectPath, sessionId };
 
   switch (type) {
     case "session.idle": {
       const lastAssistantMessage = extractLastAssistantMessage(event);
-      console.log(
+      debugLog(
         "[PushPlugin] Last assistant message:",
         lastAssistantMessage
           ? lastAssistantMessage.substring(0, 100) + "..."
           : "none",
       );
 
-      const sessionTitle = properties?.title || properties?.sessionTitle || "Session";
-      const expandableContent = lastAssistantMessage || properties?.summary || "";
+      const sessionTitle = sessionTitleForFiltering || "Session";
+      const bodyText = lastAssistantMessage
+        ? truncate(lastAssistantMessage, 200)
+        : sessionTitle;
+      const expandedText = lastAssistantMessage || sessionTitle;
 
       return {
-        title: "Session Complete",
-        body: sessionTitle,
+        title: "Agent finished the task",
+        subtitle: sessionTitle,
+        body: bodyText,
         data: {
           ...baseData,
           messageId: properties?.messageId,
@@ -183,8 +220,8 @@ export function formatNotification(
             channelId: "opencode-sessions",
             style: {
               type: "bigtext" as const,
-              text: expandableContent,
-              title: sessionTitle,
+              text: expandedText,
+              title: "Agent finished the task",
             },
           },
         },
@@ -211,6 +248,22 @@ export function formatNotification(
         }?`,
         data: { ...baseData, permissionId: properties?.permissionId },
       };
+    case "permission.asked": {
+      const patterns = Array.isArray(properties?.patterns) ? properties.patterns : [];
+      const patternsLabel = patterns.length > 0 ? ` (${patterns.join(", ")})` : "";
+      return {
+        title: "Permission Required",
+        body: `Approve ${properties?.permission || "action"}${patternsLabel}?`,
+        data: {
+          ...baseData,
+          permissionId: properties?.id,
+          permission: properties?.permission,
+          patterns,
+        },
+        // NOTE: Expo category identifiers cannot include ':' or '-'.
+        categoryId: "opencode_permission",
+      };
+    }
     default:
       return null;
   }

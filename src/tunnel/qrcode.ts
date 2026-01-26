@@ -8,6 +8,10 @@ import qrcodeTerminal from "qrcode-terminal";
 const ANSI_PATTERN = /\u001b\[[0-9;]*[A-Za-z]/g;
 let lastDisplayedUrl: string | null = null;
 
+function isValidUrl(value: string): boolean {
+  return typeof value === "string" && value.length > 0 && value !== "undefined" && value.startsWith("http");
+}
+
 function stripAnsi(value: string): string {
   return value.replace(ANSI_PATTERN, "");
 }
@@ -23,11 +27,43 @@ function trimQrLines(value: string): string {
   return lines.join("\n");
 }
 
+function hasNonWhitespace(value: string): boolean {
+  return value.trim().length > 0;
+}
+
+function generateAsciiFallback(url: string): string {
+  try {
+    const qr = qrcode.create(url, { errorCorrectionLevel: "M" });
+    const size = qr.modules.size;
+    const border = 2;
+    const black = "##";
+    const white = "..";
+    const lines: string[] = [];
+
+    for (let row = -border; row < size + border; row++) {
+      let line = "";
+      for (let col = -border; col < size + border; col++) {
+        const isDark = row >= 0 && row < size && col >= 0 && col < size
+          ? qr.modules.get(row, col)
+          : false;
+        line += isDark ? black : white;
+      }
+      lines.push(line);
+    }
+
+    return lines.join("\n");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[QR] Failed to generate ASCII QR:", message);
+    return "";
+  }
+}
+
 /**
  * Display QR code in terminal with validation
  */
 export async function displayQRCode(url: string): Promise<void> {
-  if (typeof url !== "string" || !url || url === "undefined" || !url.startsWith("http")) {
+  if (!isValidUrl(url)) {
     console.error("[QR] Invalid URL, skipping QR (already displayed or stale call)");
     return;
   }
@@ -51,7 +87,7 @@ export async function displayQRCode(url: string): Promise<void> {
  * Generate QR code as ASCII string
  */
 export async function generateQRCodeAscii(url: string): Promise<string> {
-  if (typeof url !== "string" || !url || url === "undefined" || !url.startsWith("http")) {
+  if (!isValidUrl(url)) {
     console.error("[QR] Invalid URL, skipping ASCII QR");
     return "";
   }
@@ -71,21 +107,30 @@ export async function generateQRCodeAscii(url: string): Promise<string> {
  * Generate QR code as ASCII string without ANSI colors
  */
 export async function generateQRCodeAsciiPlain(url: string): Promise<string> {
-  if (typeof url !== "string" || !url || url === "undefined" || !url.startsWith("http")) {
+  if (!isValidUrl(url)) {
     console.error("[QR] Invalid URL, skipping ASCII QR");
     return "";
   }
 
-  return new Promise((resolve) => {
+  // Prefer qrcode-terminal small mode: looks good and avoids ANSI background output.
+  // If the host sanitizes non-ASCII/whitespace and the QR becomes blank, fall back to
+  // a visible pure-ASCII representation.
+  const terminalQr = await new Promise<string>((resolve) => {
     try {
       qrcodeTerminal.generate(url, { small: true }, (qr: string) => {
-        const stripped = stripAnsi(qr).trimEnd();
-        resolve(trimQrLines(stripped));
+        resolve(qr);
       });
     } catch {
       resolve("");
     }
   });
+
+  const cleaned = trimQrLines(stripAnsi(terminalQr).trimEnd());
+  if (hasNonWhitespace(cleaned)) {
+    return cleaned;
+  }
+
+  return generateAsciiFallback(url);
 }
 
 /**

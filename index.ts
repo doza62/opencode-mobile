@@ -25,15 +25,224 @@ import http from "http";
 import { tool } from "@opencode-ai/plugin";
 import type { Plugin } from "@opencode-ai/plugin";
 import type { PushToken } from "./src/push";
+import { formatNotification } from "./src/push/formatter";
+import { sendPush } from "./src/push/sender";
 import { loadTokens, saveTokens } from "./src/push/token-store";
 import { startLocaltunnel, stopLocaltunnel, getLocaltunnelUrl } from "./src/tunnel/localtunnel";
 import { displayQRCode, generateQRCodeAscii, generateQRCodeAsciiPlain } from "./src/tunnel/qrcode";
 import { startNgrokTunnel, stopNgrokTunnel } from "./src/tunnel/ngrok";
 import { updateTunnelMetadata, clearTunnelMetadata, loadTunnelMetadata } from "./src/tunnel/metadata";
 
+function getPluginVersion(): string {
+  try {
+    const pkgUrl = new URL("../package.json", import.meta.url);
+    const raw = fs.readFileSync(pkgUrl, "utf-8");
+    const data = JSON.parse(raw) as { version?: unknown };
+    return typeof data.version === "string" ? data.version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function logPluginVersion(ctx: Parameters<Plugin>[0]): void {
+  const client = (ctx as any)?.client;
+  const appLog = client?.app?.log;
+  if (typeof appLog !== "function") {
+    return;
+  }
+
+  const version = getPluginVersion();
+  // Do not await during init; avoid recursion/hangs in startup paths.
+  setTimeout(() => {
+    Promise.resolve(
+      appLog.call(client.app, {
+        body: {
+          service: "opencode-mobile",
+          level: "debug",
+          message: `opencode-mobile v${version}`,
+          extra: {
+            version,
+          },
+        },
+      })
+    ).catch(() => {
+      // Best-effort; never block plugin init.
+    });
+  }, 750);
+}
+
 // Server state
 let httpServer: http.Server | null = null;
 let activeTunnel: { url: string; tunnelId: string; port: number; provider: string } | null = null;
+
+function getOpenCodeBaseUrl(ctx: Parameters<Plugin>[0]): string | null {
+  const serverUrl = (ctx as any)?.serverUrl;
+  if (serverUrl instanceof URL) {
+    return serverUrl.origin;
+  }
+
+  const port = Number(serverUrl?.port);
+  if (Number.isFinite(port) && port > 0) {
+    return `http://127.0.0.1:${port}`;
+  }
+
+  return null;
+}
+
+async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`[PushPlugin] HTTP ${res.status} for ${url}`);
+    }
+    return (await res.json()) as unknown;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function extractSessionIdFromEvent(event: any): string | null {
+  const props = (event as any)?.properties ?? {};
+  const id =
+    props.sessionID ||
+    props.sessionId ||
+    (event as any)?.sessionID ||
+    (event as any)?.sessionId ||
+    null;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function pickString(obj: unknown, key: string): string | undefined {
+  if (!obj || typeof obj !== "object") return undefined;
+  const value = (obj as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getLastAssistantTextFromMessages(messages: unknown): string | null {
+  if (!Array.isArray(messages)) return null;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i] as any;
+    const role = msg?.info?.role;
+    if (role !== "assistant") continue;
+    const parts = msg?.parts;
+    if (!Array.isArray(parts)) continue;
+
+    const textParts = parts
+      .filter((p: any) => p?.type === "text" && typeof p?.text === "string")
+      .map((p: any) => p.text.trim())
+      .filter(Boolean);
+
+    const combined = textParts.join("\n\n").trim();
+    if (combined) return combined;
+  }
+
+  return null;
+}
+
+async function enrichEventForNotification(
+  ctx: Parameters<Plugin>[0],
+  event: any,
+): Promise<any> {
+  if (event?.type !== "session.idle") {
+    return event;
+  }
+
+  const sessionID = extractSessionIdFromEvent(event);
+  if (!sessionID) {
+    return event;
+  }
+
+  const baseUrl = getOpenCodeBaseUrl(ctx);
+  if (!baseUrl) {
+    return event;
+  }
+
+  const props = { ...(event.properties ?? {}) } as Record<string, unknown>;
+
+  const existingTitle =
+    (typeof props.title === "string" && props.title) ||
+    (typeof props.sessionTitle === "string" && props.sessionTitle) ||
+    null;
+  const existingLast = typeof props.lastAssistantMessage === "string" ? props.lastAssistantMessage : "";
+  const existingDirectory = typeof props.directory === "string" ? props.directory : "";
+
+  try {
+    if (!existingTitle || !existingDirectory) {
+      const sessionInfo = await fetchJson(
+        `${baseUrl}/session/${encodeURIComponent(sessionID)}`,
+        1200,
+      );
+
+      const title = pickString(sessionInfo, "title");
+      const directory = pickString(sessionInfo, "directory");
+
+      if (!existingTitle && title) {
+        props.title = title;
+        props.sessionTitle = title;
+      }
+
+      if (!existingDirectory && directory) {
+        props.directory = directory;
+        props.projectPath = directory;
+      }
+    }
+  } catch (error: unknown) {
+    debugLog("[PushPlugin] Failed to fetch session info:", error);
+  }
+
+  try {
+    if (!existingLast) {
+      const msgs = await fetchJson(
+        `${baseUrl}/session/${encodeURIComponent(sessionID)}/message?limit=50`,
+        1600,
+      );
+      const lastText = getLastAssistantTextFromMessages(msgs);
+      if (lastText) {
+        props.lastAssistantMessage = lastText;
+      }
+    }
+  } catch (error: unknown) {
+    debugLog("[PushPlugin] Failed to fetch session messages:", error);
+  }
+
+  return { ...event, properties: props };
+}
+
+function getNotificationServerUrl(ctx: Parameters<Plugin>[0]): string {
+  if (activeTunnel?.url) {
+    return activeTunnel.url;
+  }
+
+  const metadata = loadTunnelMetadata();
+  if (metadata.url) {
+    return metadata.url;
+  }
+
+  const serverUrl = (ctx as any)?.serverUrl;
+  if (serverUrl instanceof URL) {
+    return serverUrl.toString();
+  }
+
+  return "";
+}
+
+async function maybeSendPushFromEvent(ctx: Parameters<Plugin>[0], event: any): Promise<void> {
+  const serverUrl = getNotificationServerUrl(ctx);
+
+  try {
+    const enriched = await enrichEventForNotification(ctx, event);
+    const notification = formatNotification(enriched, serverUrl, ctx as any);
+    if (notification) {
+      await sendPush(notification);
+    }
+  } catch (error: unknown) {
+    console.error("[PushPlugin] Failed to format/send notification:", error);
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +251,7 @@ const cors = {
 };
 
 const MOBILE_COMMAND = "mobile";
+const TEST_PUSH_ENABLED = process.env.OPENCODE_MOBILE_TEST_PUSH === "1";
 
 function getMobileCommandMarkdown(): string {
   return [
@@ -54,6 +264,10 @@ function getMobileCommandMarkdown(): string {
     "",
     "- If $ARGUMENTS is non-empty, call the tool with { token: \"$ARGUMENTS\" }.",
     "- If $ARGUMENTS is empty, call the tool with no args to print the QR.",
+    "",
+    "Important:",
+    "- Do not output analysis/thoughts.",
+    "- Only call the tool; return no extra text.",
     "",
     "Examples:",
     "- `/mobile`",
@@ -68,27 +282,30 @@ async function ensureMobileCommandExists(ctx: Parameters<Plugin>[0]): Promise<vo
     return;
   }
 
-  const client = rawCtx?.client ?? rawCtx?.sdk ?? rawCtx;
-  const commandApi = client?.Command ?? client?.command;
-  const listCommands = commandApi?.list?.bind(commandApi);
-  if (typeof listCommands === "function") {
-    try {
-      const result = await listCommands({
-        query: directory ? { directory } : undefined,
-      });
-      const commands = (result as any)?.data ?? result;
-      if (Array.isArray(commands) && commands.some((c) => c?.name === MOBILE_COMMAND)) {
-        return;
-      }
-    } catch (error: unknown) {
-      debugLog("[PushPlugin] Failed to list commands:", error);
-    }
+  // Guard: In some OpenCode execution contexts, directory can be `/`.
+  // Never attempt to write `/.opencode/...` (will throw EROFS).
+  if (directory === path.parse(directory).root) {
+    return;
   }
 
+  // Skip Command.list API - it's unreliable and times out frequently.
+  // Use filesystem check directly, which is faster and more reliable.
   try {
     const commandsDir = path.join(directory, ".opencode", "commands");
     const commandPath = path.join(commandsDir, `${MOBILE_COMMAND}.md`);
     if (fs.existsSync(commandPath)) {
+      // Best-effort auto-update for our own generated command.
+      try {
+        const current = fs.readFileSync(commandPath, "utf-8");
+        const next = getMobileCommandMarkdown();
+        const looksLikeOurs = current.includes("description: OpenCode Mobile (QR + push token)");
+        if (looksLikeOurs && current.trim() !== next.trim()) {
+          fs.writeFileSync(commandPath, next, "utf-8");
+          console.log(`[PushPlugin] Updated /${MOBILE_COMMAND} command at ${commandPath}`);
+        }
+      } catch {
+        // Ignore; command file may be locked or user-managed.
+      }
       return;
     }
 
@@ -105,7 +322,8 @@ function formatMobileQrMessage(url: string, qr: string): string {
     return url;
   }
 
-  return `${qr}\n${url}`;
+  // Code block preserves whitespace so the QR stays aligned.
+  return `\`\`\`\n${qr}\n\`\`\`\n${url}`;
 }
 
 function loadTunnelUrlFromPath(tunnelPath: string): string | null {
@@ -154,7 +372,7 @@ const mobileTool = tool({
       return "No tunnel URL found.";
     }
 
-    const qr = await generateQRCodeAsciiPlain(url) || await generateQRCodeAscii(url);
+    const qr = await generateQRCodeAsciiPlain(url);
     return formatMobileQrMessage(url, qr);
   },
 });
@@ -436,30 +654,38 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
   console.log("[opencode-mobile] Plugin init called");
   debugLog("[PushPlugin][Mobile] Initialized");
 
+  logPluginVersion(ctx);
+
   await ensureMobileCommandExists(ctx);
 
-  // Detect serve mode: 
-  // - serverUrl present means we have a running server
-  // - NOT "attach" mode (attach connects to existing server, doesn't need tunnel)
-  const hasServerUrl = !!(ctx as any).serverUrl;
+  // Only run the plugin LAN server + auto-tunnel in `opencode serve` mode.
+  //
+  // IMPORTANT:
+  // - OpenCode initializes plugins for other commands too (e.g. `opencode debug wait`).
+  // - Those commands may still provide `ctx.serverUrl`, so `!!ctx.serverUrl` is NOT a safe
+  //   proxy for "serve mode" and will cause ngrok/localtunnel to start unexpectedly.
+  // - Bun preserves the OpenCode subcommand tokens in `process.argv` (serve/debug/wait/etc),
+  //   so we gate on the presence of the literal `serve` token.
+  const hasServerUrl = !!(ctx as any)?.serverUrl;
   const isAttachMode = process.argv.includes("attach");
-  const isServeMode = hasServerUrl && !isAttachMode;
-  
+  const isServeMode = process.argv.includes("serve") && !isAttachMode;
+
   debugLog("[PushPlugin] hasServerUrl:", hasServerUrl);
   debugLog("[PushPlugin] isAttachMode:", isAttachMode);
   debugLog("[PushPlugin] isServeMode:", isServeMode);
   debugLog("[PushPlugin] process.argv:", process.argv.join(", "));
 
   if (!isServeMode) {
-    debugLog("[PushPlugin] Not in serve mode, skipping tunnel/server");
+    console.log(
+      "[opencode-mobile] Plugin init OK; skipping (not in 'serve' mode). " +
+        "Run: opencode serve ...",
+    );
     return {
       tool: {
         mobile: mobileTool,
       },
-      event: async ({ event }) => {
-        if (event.type === "command.executed") {
-          debugLog("[PushPlugin] command.executed payload:", JSON.stringify((event as any).properties));
-        }
+      event: async () => {
+        // No-op unless running in `opencode serve` mode.
       },
     };
   }
@@ -527,8 +753,42 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
       mobile: mobileTool,
     },
     event: async ({ event }) => {
+      const eventType = (() => {
+        if (!event || typeof event !== "object") return null;
+        const value = (event as Record<string, unknown>).type;
+        return typeof value === "string" ? value : null;
+      })();
+
+      if (
+        eventType === "session.idle" ||
+        eventType === "session.error" ||
+        eventType === "permission.updated" ||
+        eventType === "permission.asked"
+      ) {
+        void maybeSendPushFromEvent(ctx, event);
+      }
+
       if (event.type === "command.executed") {
         debugLog("[PushPlugin] command.executed payload:", JSON.stringify((event as any).properties));
+
+        const props = (event as any).properties ?? {};
+        if (
+          TEST_PUSH_ENABLED &&
+          props?.name === MOBILE_COMMAND &&
+          typeof props?.arguments === "string"
+        ) {
+          void sendPush({
+            title: "OpenCode Mobile",
+            body: "Test push from /mobile",
+            data: {
+              type: "mobile.test",
+              serverUrl: getNotificationServerUrl(ctx),
+              arguments: props.arguments,
+              sessionId: props.sessionID,
+              messageId: props.messageID,
+            },
+          });
+        }
       }
     },
   };

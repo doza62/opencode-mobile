@@ -11,8 +11,10 @@ export interface PushToken {
 
 export interface Notification {
   title: string;
+  subtitle?: string; // iOS subtitle, shows below title
   body: string;
   data: Record<string, unknown>;
+  categoryId?: string;
   android?: AndroidNotificationConfig;
   ios?: iOSNotificationConfig;
 }
@@ -41,6 +43,7 @@ export interface iOSNotificationConfig {
 export interface NotificationEvent {
   type: string;
   properties: Record<string, unknown>;
+  directory?: string;
   sessionId?: string;
   sessionID?: string;
   parentSessionId?: string;

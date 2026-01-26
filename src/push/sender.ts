@@ -34,9 +34,11 @@ export async function sendPush(notification: Notification): Promise<void> {
     to: token,
     sound: "default",
     title: notification.title,
+    ...(notification.subtitle && { subtitle: notification.subtitle }), // iOS subtitle
     body: notification.body,
     data: notification.data,
     priority: "high",
+    ...(notification.categoryId && { categoryId: notification.categoryId }),
     ...(notification.android && { android: notification.android }),
     ...(notification.ios && { ios: notification.ios }),
   }));

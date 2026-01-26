@@ -289,6 +289,7 @@ signals.forEach((signal) => {
 6. **Bun Server**: Use `Bun.serve()` for HTTP servers
 7. **Tunnel Providers**: Support ngrok, cloudflare, localtunnel with fallback
 8. **Ngrok Multi-Strategy**: 4 fallback strategies if one fails
+9. **Serve Mode Gate**: Only start the LAN server + auto-tunnel when `process.argv` includes `serve`; do NOT infer serve mode from `ctx.serverUrl` (it can be present for `opencode debug wait`)
 
 ## Configuration
 
