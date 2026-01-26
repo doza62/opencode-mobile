@@ -21,6 +21,10 @@
     "./qr": {
       "import": "./dist/src/cli/qr.js",
       "types": "./dist/src/cli/qr.d.ts"
+    },
+    "./install": {
+      "import": "./dist/src/cli/install.js",
+      "types": "./dist/src/cli/install.d.ts"
     }
   },
   "files": [

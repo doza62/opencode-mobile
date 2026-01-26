@@ -7,6 +7,7 @@
 
 import { main as auditMain } from "../dist/src/cli/index.js";
 import { main as qrMain } from "../dist/src/cli/qr.js";
+import { main as installMain } from "../dist/src/cli/install.js";
 
 const args = process.argv.slice(2);
 const subcommand = args[0];
@@ -19,6 +20,11 @@ const run = async () => {
 
   if (subcommand === "audit") {
     await auditMain(args.slice(1));
+    return;
+  }
+
+  if (subcommand === "install") {
+    await installMain(args.slice(1));
     return;
   }
 
