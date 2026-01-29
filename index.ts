@@ -7,6 +7,23 @@
  * - Mobile connects: tunnel → OpenCode (SSE), or LAN → plugin (push tokens)
  */
 
+import * as fs from "fs";
+
+// Get plugin version first thing - for visual tracking in logs
+function getPluginVersion(): string {
+  try {
+    const pkgUrl = new URL("../package.json", import.meta.url);
+    const raw = fs.readFileSync(pkgUrl, "utf-8");
+    const data = JSON.parse(raw) as { version?: unknown };
+    return typeof data.version === "string" ? data.version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+// Log version immediately on module load (before any other code runs)
+console.log(`[opencode-mobile] v${getPluginVersion()}`);
+
 const DEBUG_ENABLED = process.env.OPENCODE_MOBILE_DEBUG === "1";
 const debugLog = (...args: unknown[]): void => {
   if (DEBUG_ENABLED) {
@@ -18,7 +35,6 @@ debugLog("\n=== opencode-mobile DEV ===");
 debugLog("LAN-only architecture: plugin handles push tokens, tunnel goes to OpenCode directly");
 debugLog("[PushPlugin][Mobile] Entry loaded: index.ts");
 
-import * as fs from "fs";
 import * as path from "path";
 import http from "http";
 
@@ -32,17 +48,6 @@ import { startLocaltunnel, stopLocaltunnel, getLocaltunnelUrl } from "./src/tunn
 import { displayQRCode, generateQRCodeAscii, generateQRCodeAsciiPlain } from "./src/tunnel/qrcode";
 import { startNgrokTunnel, stopNgrokTunnel } from "./src/tunnel/ngrok";
 import { updateTunnelMetadata, clearTunnelMetadata, loadTunnelMetadata } from "./src/tunnel/metadata";
-
-function getPluginVersion(): string {
-  try {
-    const pkgUrl = new URL("../package.json", import.meta.url);
-    const raw = fs.readFileSync(pkgUrl, "utf-8");
-    const data = JSON.parse(raw) as { version?: unknown };
-    return typeof data.version === "string" ? data.version : "unknown";
-  } catch {
-    return "unknown";
-  }
-}
 
 function logPluginVersion(ctx: Parameters<Plugin>[0]): void {
   const client = (ctx as any)?.client;
