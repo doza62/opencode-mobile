@@ -7,6 +7,7 @@ export interface PushToken {
   platform: "ios" | "android";
   deviceId: string;
   registeredAt: string;
+  serverUrl?: string;
 }
 
 export interface Notification {

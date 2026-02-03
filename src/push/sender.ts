@@ -22,6 +22,16 @@ export async function sendPush(notification: Notification): Promise<void> {
   }
 
   console.log(`[PushPlugin] Sending notification to ${tokens.length} device(s)`);
+  
+  // Log per-token serverUrl usage
+  tokens.forEach((t, i) => {
+    if (t.serverUrl) {
+      console.log(`[PushPlugin] Device ${i + 1}: Using custom serverUrl: ${t.serverUrl}`);
+    } else {
+      console.log(`[PushPlugin] Device ${i + 1}: Using tunnel URL`);
+    }
+  });
+  
   console.log("[PushPlugin] Notification details:", {
     title: notification.title,
     body: notification.body,
@@ -30,13 +40,16 @@ export async function sendPush(notification: Notification): Promise<void> {
     ios: notification.ios ? "configured" : "not configured"
   });
 
-  const messages = tokens.map(({ token }) => ({
+  const messages = tokens.map(({ token, serverUrl }) => ({
     to: token,
     sound: "default",
     title: notification.title,
     ...(notification.subtitle && { subtitle: notification.subtitle }), // iOS subtitle
     body: notification.body,
-    data: notification.data,
+    data: {
+      ...notification.data,
+      ...(serverUrl && { serverUrl }),
+    },
     priority: "high",
     ...(notification.categoryId && { categoryId: notification.categoryId }),
     ...(notification.android && { android: notification.android }),

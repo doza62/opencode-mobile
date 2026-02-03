@@ -270,13 +270,23 @@ function getMobileCommandMarkdown(): string {
     "- If $ARGUMENTS is non-empty, call the tool with { token: \"$ARGUMENTS\" }.",
     "- If $ARGUMENTS is empty, call the tool with no args to print the QR.",
     "",
+    "Token format:",
+    "- `ExponentPushToken[xxxxxxxxxxxxxx]` - Register push token only",
+    "- `ExponentPushToken[xxx] ServerUrl[http://...]` - Register with custom server URL",
+    "",
+    "When to use ServerUrl:",
+    "- Use when the mobile app is connected directly to a local server",
+    "- The serverUrl will be used for notification deep links instead of tunnel",
+    "- Omit when using tunnel connection (default behavior)",
+    "",
     "Important:",
     "- Do not output analysis/thoughts.",
     "- Only call the tool; return no extra text.",
     "",
     "Examples:",
-    "- `/mobile`",
-    "- `/mobile ExpoPushToken[xxxxxxxxxxxxxx]`",
+    "- `/mobile` - Show QR code for tunnel connection",
+    "- `/mobile ExponentPushToken[xxxxxxxxxxxxxx]` - Register token",
+    "- `/mobile ExponentPushToken[xxx] ServerUrl[http://192.168.1.100:4096]` - Register with custom URL",
   ].join("\n");
 }
 
@@ -352,6 +362,36 @@ function loadTunnelUrlFromPath(tunnelPath: string): string | null {
   return null;
 }
 
+/**
+ * Parse mobile command arguments to extract token and optional serverUrl
+ * Format: "ExponentPushToken[xxx]" or "ExponentPushToken[xxx] ServerUrl[http://...]"
+ */
+function parseMobileCommand(input: string): { token: string; serverUrl?: string } | null {
+  const trimmed = input.trim();
+
+  // Match token in format ExponentPushToken[xxx] or similar
+  const tokenMatch = trimmed.match(/^(ExponentPushToken\[[^\]]+\])/);
+  if (!tokenMatch) {
+    return null;
+  }
+
+  const token = tokenMatch[1];
+  const remaining = trimmed.slice(token.length).trim();
+
+  // Check for ServerUrl[yyy] format
+  const serverUrlMatch = remaining.match(/^ServerUrl\[([^\]]+)\]$/);
+  if (serverUrlMatch) {
+    const serverUrl = serverUrlMatch[1];
+    // Basic validation - must start with http:// or https://
+    if (serverUrl.startsWith('http://') || serverUrl.startsWith('https://')) {
+      return { token, serverUrl };
+    }
+  }
+
+  // If no serverUrl or invalid format, return just the token
+  return { token };
+}
+
 const mobileTool = tool({
   description: "Generate a mobile connection QR code",
   args: {
@@ -368,9 +408,14 @@ const mobileTool = tool({
   async execute(args) {
     const rawToken = args.token?.trim();
     if (rawToken) {
-      const result = registerPushToken(rawToken);
+      const parsed = parseMobileCommand(rawToken);
+      if (!parsed) {
+        return "Invalid token format. Expected: ExponentPushToken[xxx] or ExponentPushToken[xxx] ServerUrl[http://...]";
+      }
+      const result = registerPushToken(parsed.token, parsed.serverUrl);
       const action = result.added ? "Registered" : "Updated";
-      return `Push token ${action.toLowerCase()}.`;
+      const serverUrlMsg = parsed.serverUrl ? ` with server URL: ${parsed.serverUrl}` : "";
+      return `Push token ${action.toLowerCase()}${serverUrlMsg}.`;
     }
 
     const rawUrl = args.url?.trim();
@@ -387,7 +432,7 @@ const mobileTool = tool({
   },
 });
 
-function registerPushToken(token: string): { added: boolean; total: number } {
+function registerPushToken(token: string, serverUrl?: string): { added: boolean; total: number } {
   const trimmed = token.trim();
   const tokens = loadTokens();
   const existingIndex = tokens.findIndex((t) => t.token === trimmed || t.deviceId === trimmed);
@@ -398,6 +443,7 @@ function registerPushToken(token: string): { added: boolean; total: number } {
     platform: "ios",
     deviceId: trimmed,
     registeredAt: now,
+    ...(serverUrl && { serverUrl }),
   };
 
   if (existingIndex >= 0) {
@@ -779,6 +825,19 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
         eventType === "permission.updated" ||
         eventType === "permission.asked"
       ) {
+        // Debug: Log event structure to diagnose child session detection
+        if (DEBUG_ENABLED && eventType === "session.idle") {
+          const props = (event as any)?.properties;
+          console.log("[PushPlugin][DEBUG] session.idle event:");
+          console.log("  - event.parentSessionId:", (event as any)?.parentSessionId);
+          console.log("  - event.parentId:", (event as any)?.parentId);
+          console.log("  - properties.parentSessionId:", props?.parentSessionId);
+          console.log("  - properties.parentId:", props?.parentId);
+          console.log("  - properties.parentSessionID:", props?.parentSessionID);
+          console.log("  - properties.info?.parentSessionId:", props?.info?.parentSessionId);
+          console.log("  - properties.info?.parentId:", props?.info?.parentId);
+          console.log("  - Full event:", JSON.stringify(event, null, 2));
+        }
         void maybeSendPushFromEvent(ctx, event);
       }
 
