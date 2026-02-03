@@ -9,6 +9,8 @@ import * as ngrok from "@ngrok/ngrok";
 import type { TunnelConfig, TunnelInfo, NgrokDiagnostics } from "./types";
 
 let ngrokInstance: any = null;
+let ngrokSession: any = null;
+let ngrokListener: any = null;
 
 /**
  * Diagnose ngrok installation and configuration
@@ -235,10 +237,36 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
 
   async function cleanupNgrok(): Promise<void> {
     try {
-      await ngrok.kill();
+      if (ngrokListener) {
+        try {
+          await ngrokListener.close();
+          console.log("[Tunnel] Closed ngrok listener");
+        } catch (e: any) {
+          console.log("[Tunnel] Could not close listener:", e.message);
+        }
+        ngrokListener = null;
+      }
+      
+      if (ngrokSession) {
+        try {
+          await ngrokSession.close();
+          console.log("[Tunnel] Closed ngrok session");
+        } catch (e: any) {
+          console.log("[Tunnel] Could not close session:", e.message);
+        }
+        ngrokSession = null;
+      }
+      
+      try {
+        await ngrok.kill();
+        console.log("[Tunnel] Killed ngrok process");
+      } catch {}
+      
       ngrokInstance = null;
+      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (e: any) {
-      console.log("[Tunnel] Could not clean up ngrok session");
+      console.log("[Tunnel] Could not clean up ngrok:", e.message);
     }
   }
 
@@ -283,9 +311,7 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
   console.log(`[Tunnel] Format: ${configContent.includes('version: "3"') ? "v3" : configContent.includes("version: 2") ? "v2" : "unknown"}`);
   console.log(`[Tunnel] Token: ${configContent.includes("authtoken:") || configContent.includes("agent:") ? "✓" : "✗"}`);
 
-  // Try multiple strategies if one fails
   const strategies = [
-    // Strategy 1: Basic ngrok.forward() with direct authtoken
     async () => {
       console.log("[Tunnel] Strategy 1: ngrok.forward() with direct token...");
       
@@ -296,20 +322,19 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
       
       console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
       
-      const listener = await ngrok.forward({
+      ngrokListener = await ngrok.forward({
         addr: config.port,
         authtoken: token,
       });
       
-      console.log(`[Tunnel] URL: ${listener.url()}`);
-      return listener.url();
+      const url = ngrokListener.url();
+      console.log(`[Tunnel] URL: ${url}`);
+      return url;
     },
     
-    // Strategy 2: With session metadata and SessionBuilder
     async () => {
-      console.log("[Tunnel] Strategy 2: SessionBuilder + metadata...");
+      console.log("[Tunnel] Strategy 2: SessionBuilder with explicit session...");
       await cleanupNgrok();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
       
       const token = config.authToken || authtoken;
       if (!token || typeof token !== "string") {
@@ -318,49 +343,22 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
       
       console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
       
-      // Use SessionBuilder for more control
-      const session = await new ngrok.SessionBuilder()
+      ngrokSession = await new ngrok.SessionBuilder()
         .authtoken(token)
         .metadata(`opencode-${Date.now()}`)
         .connect();
       
-      const listener = await session.httpEndpoint()
+      ngrokListener = await ngrokSession.httpEndpoint()
         .listenAndForward(`localhost:${config.port}`);
       
-      console.log(`[Tunnel] URL: ${listener.url()}`);
-      return listener.url();
+      const url = ngrokListener.url();
+      console.log(`[Tunnel] URL: ${url}`);
+      return url;
     },
     
-    // Strategy 3: Clean session with SessionBuilder
     async () => {
-      console.log("[Tunnel] Strategy 3: clean session with SessionBuilder...");
+      console.log("[Tunnel] Strategy 3: ngrok binary...");
       await cleanupNgrok();
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      
-      const token = config.authToken || authtoken;
-      if (!token || typeof token !== "string") {
-        throw new Error("No valid authtoken available for Strategy 3");
-      }
-      
-      console.log(`[Tunnel] Token: ${token.substring(0, 8)}... (direct token)`);
-      
-      // Create a completely fresh session with direct token
-      const session = await new ngrok.SessionBuilder()
-        .authtoken(token)
-        .connect();
-      
-      const listener = await session.httpEndpoint()
-        .listenAndForward(`localhost:${config.port}`);
-      
-      console.log(`[Tunnel] URL: ${listener.url()}`);
-      return listener.url();
-    },
-
-    // Strategy 4: Use ngrok binary directly
-    async () => {
-      console.log("[Tunnel] Strategy 4: ngrok binary...");
-      await cleanupNgrok();
-      await new Promise((resolve) => setTimeout(resolve, 2000));
       
       const configPath = activeConfigPath !== "none" ? activeConfigPath : "";
       console.log(`[Tunnel] Config: ${configPath || "(default)"}`);
@@ -384,7 +382,6 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
         const text = data.toString();
         output += text;
         
-        // Extract URL from format: url=https://abc.ngrok-free.app
         const urlMatch = text.match(/url=([^\s]+)/);
         if (urlMatch && !resolved) {
           resolved = true;
@@ -412,7 +409,6 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
       
       await Promise.race([waitPromise, timeoutPromise]);
       
-      // Final extraction
       const finalUrlMatch = output.match(/url=([^\s]+)/);
       if (finalUrlMatch) {
         return finalUrlMatch[1];
@@ -479,14 +475,28 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
   throw lastError || new Error("Unknown error");
 }
 
-/**
- * Stop the ngrok tunnel
- */
 export async function stopNgrokTunnel(): Promise<void> {
+  if (ngrokListener) {
+    try {
+      await ngrokListener.close();
+    } catch {}
+    ngrokListener = null;
+  }
+  if (ngrokSession) {
+    try {
+      await ngrokSession.close();
+    } catch {}
+    ngrokSession = null;
+  }
   if (ngrokInstance) {
-    await ngrokInstance.close();
+    try {
+      await ngrokInstance.close();
+    } catch {}
     ngrokInstance = null;
   }
+  try {
+    await ngrok.kill();
+  } catch {}
 }
 
 /**
