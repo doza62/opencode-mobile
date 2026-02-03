@@ -47,6 +47,7 @@ import { loadTokens, saveTokens } from "./src/push/token-store";
 import { startLocaltunnel, stopLocaltunnel, getLocaltunnelUrl } from "./src/tunnel/localtunnel";
 import { displayQRCode, generateQRCodeAscii, generateQRCodeAsciiPlain } from "./src/tunnel/qrcode";
 import { startNgrokTunnel, stopNgrokTunnel } from "./src/tunnel/ngrok";
+import { startCloudflareTunnel, stopCloudflareTunnel, getCloudflareUrl } from "./src/tunnel/cloudflare";
 import { updateTunnelMetadata, clearTunnelMetadata, loadTunnelMetadata } from "./src/tunnel/metadata";
 
 function logPluginVersion(ctx: Parameters<Plugin>[0]): void {
@@ -547,12 +548,18 @@ async function handleTunnel(req: http.IncomingMessage, res: http.ServerResponse,
       
       let tunnel;
       try {
-        tunnel = await startNgrokTunnel({ port: targetPort });
-        console.log("[Tunnel] Ngrok started:", tunnel.url);
-      } catch (ngrokError: any) {
-        console.log("[Tunnel] Ngrok failed, trying localtunnel...");
-        tunnel = await startLocaltunnel({ port: targetPort });
-        console.log("[Tunnel] Localtunnel started:", tunnel.url);
+        tunnel = await startCloudflareTunnel({ port: targetPort });
+        console.log("[Tunnel] Cloudflare started:", tunnel.url);
+      } catch (cloudflareError: any) {
+        console.log("[Tunnel] Cloudflare failed, trying localtunnel...");
+        try {
+          tunnel = await startLocaltunnel({ port: targetPort });
+          console.log("[Tunnel] Localtunnel started:", tunnel.url);
+        } catch (localError: any) {
+          console.log("[Tunnel] Localtunnel failed, trying ngrok...");
+          tunnel = await startNgrokTunnel({ port: targetPort });
+          console.log("[Tunnel] Ngrok started:", tunnel.url);
+        }
       }
       
       activeTunnel = tunnel;
@@ -588,7 +595,9 @@ async function handleTunnel(req: http.IncomingMessage, res: http.ServerResponse,
 
   if (req.url === "/tunnel" && req.method === "DELETE") {
     try {
-      if (activeTunnel?.provider === "ngrok") {
+      if (activeTunnel?.provider === "cloudflare") {
+        await stopCloudflareTunnel();
+      } else if (activeTunnel?.provider === "ngrok") {
         await stopNgrokTunnel();
       } else {
         await stopLocaltunnel();
@@ -621,6 +630,18 @@ async function handleTunnel(req: http.IncomingMessage, res: http.ServerResponse,
         tunnelId: activeTunnel.tunnelId,
         port: activeTunnel.port,
         targetPort: openCodePort,
+        metadata: storedMetadata
+      }));
+      return;
+    }
+
+    const cloudflareUrl = getCloudflareUrl();
+    if (cloudflareUrl) {
+      res.writeHead(200, { ...cors, "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        type: "cloudflare",
+        url: cloudflareUrl,
+        tunnelId: cloudflareUrl.split("//")[1]?.split(".")[0] || "cloudflare",
         metadata: storedMetadata
       }));
       return;
@@ -774,8 +795,24 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
   // Auto-start tunnel pointing to OpenCode DIRECTLY (not through plugin!)
   debugLog("[DEV] Auto-starting tunnel...");
   try {
-    const tunnel = await startNgrokTunnel({ port: openCodePort });
-    debugLog("[DEV] Tunnel started:", tunnel.url);
+    const tunnel = await startCloudflareTunnel({ port: openCodePort });
+    debugLog("[DEV] Cloudflare tunnel started:", tunnel.url);
+    activeTunnel = tunnel;
+    await displayQRCode(tunnel.url);
+
+    // Save tunnel metadata to .config/opencode/tunnel.json
+    updateTunnelMetadata(
+      tunnel.url,
+      tunnel.tunnelId,
+      tunnel.provider,
+      tunnel.port,
+      openCodePort
+    );
+  } catch (cloudflareError: any) {
+    debugLog("[DEV] Cloudflare failed, trying localtunnel...");
+    try {
+      const tunnel = await startLocaltunnel({ port: openCodePort });
+      debugLog("[DEV] Localtunnel started:", tunnel.url);
       activeTunnel = tunnel;
       await displayQRCode(tunnel.url);
 
@@ -787,11 +824,11 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
         tunnel.port,
         openCodePort
       );
-    } catch (ngrokError: any) {
-      debugLog("[DEV] Ngrok failed, trying localtunnel...");
+    } catch (localError: any) {
+      debugLog("[DEV] Localtunnel failed, trying ngrok...");
       try {
-        const tunnel = await startLocaltunnel({ port: openCodePort });
-        debugLog("[DEV] Tunnel started:", tunnel.url);
+        const tunnel = await startNgrokTunnel({ port: openCodePort });
+        debugLog("[DEV] Ngrok tunnel started:", tunnel.url);
         activeTunnel = tunnel;
         await displayQRCode(tunnel.url);
 
@@ -803,10 +840,11 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
           tunnel.port,
           openCodePort
         );
-      } catch (localError: any) {
-        console.error("[DEV] All tunnels failed:", localError.message);
+      } catch (ngrokError: any) {
+        console.error("[DEV] All tunnels failed:", ngrokError.message);
       }
     }
+  }
 
   return {
     tool: {
