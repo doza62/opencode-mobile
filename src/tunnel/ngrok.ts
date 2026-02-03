@@ -24,12 +24,10 @@ export async function diagnoseNgrok(): Promise<NgrokDiagnostics> {
   };
 
   try {
-    const { promisify } = await import("util");
-    const execAsync = promisify((await import("child_process")).exec);
-    await execAsync("which ngrok");
+    await import("@ngrok/ngrok");
     diagnostics.installed = true;
   } catch {
-    diagnostics.error = "ngrok not installed";
+    diagnostics.error = "@ngrok/ngrok SDK not available";
     return diagnostics;
   }
 
@@ -193,7 +191,7 @@ export async function ensureNgrokReady(): Promise<{ ready: boolean; authtoken: s
   }
 
   if (!diagnostics.installed) {
-    console.log("\n[Setup] Please install ngrok: brew install ngrok");
+    console.log("\n[Setup] Ngrok SDK not available. Please ensure dependencies are installed: npm install");
     return { ready: false, authtoken: null };
   }
 
@@ -499,13 +497,11 @@ export async function stopNgrok(): Promise<void> {
 }
 
 /**
- * Check if ngrok is installed
+ * Check if ngrok SDK is available
  */
 export async function isNgrokInstalled(): Promise<boolean> {
   try {
-    const { promisify } = await import("util");
-    const execAsync = promisify((await import("child_process")).exec);
-    await execAsync("which ngrok");
+    await import("@ngrok/ngrok");
     return true;
   } catch {
     return false;
