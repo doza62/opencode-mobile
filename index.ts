@@ -46,8 +46,8 @@ import { sendPush } from "./src/push/sender";
 import { loadTokens, saveTokens } from "./src/push/token-store";
 import { startLocaltunnel, stopLocaltunnel, getLocaltunnelUrl } from "./src/tunnel/localtunnel";
 import { displayQRCode, generateQRCodeAscii, generateQRCodeAsciiPlain } from "./src/tunnel/qrcode";
-import { startNgrokTunnel, stopNgrokTunnel } from "./src/tunnel/ngrok";
-import { startCloudflareTunnel, stopCloudflareTunnel, getCloudflareUrl } from "./src/tunnel/cloudflare";
+import { startNgrokTunnel, stopNgrokTunnel, isNgrokInstalled } from "./src/tunnel/ngrok";
+import { startCloudflareTunnel, stopCloudflareTunnel, getCloudflareUrl, isCloudflareInstalled } from "./src/tunnel/cloudflare";
 import { updateTunnelMetadata, clearTunnelMetadata, loadTunnelMetadata } from "./src/tunnel/metadata";
 
 function logPluginVersion(ctx: Parameters<Plugin>[0]): void {
@@ -80,6 +80,98 @@ function logPluginVersion(ctx: Parameters<Plugin>[0]): void {
 // Server state
 let httpServer: http.Server | null = null;
 let activeTunnel: { url: string; tunnelId: string; port: number; provider: string } | null = null;
+
+// Tunnel provider configuration
+const VALID_PROVIDERS = ["cloudflare", "ngrok", "localtunnel", "auto"] as const;
+type TunnelProvider = typeof VALID_PROVIDERS[number];
+
+/**
+ * Get the configured tunnel provider from environment variable
+ * Defaults to 'auto' if not set or invalid
+ */
+function getTunnelProvider(): TunnelProvider {
+  const provider = process.env.TUNNEL_PROVIDER?.toLowerCase() as TunnelProvider;
+  if (VALID_PROVIDERS.includes(provider)) {
+    return provider;
+  }
+  return "auto";
+}
+
+/**
+ * Start a tunnel with fallback logic based on TUNNEL_PROVIDER env var
+ * - 'auto': Try cloudflare → ngrok → localtunnel (in order of trustworthiness)
+ * - Specific provider: Try only that provider
+ */
+async function startTunnelWithFallback(port: number): Promise<{ url: string; tunnelId: string; port: number; provider: string }> {
+  const provider = getTunnelProvider();
+
+  if (provider === "auto") {
+    console.log("[Tunnel] Auto mode: selecting provider in order of security (cloudflare → ngrok → localtunnel)...");
+
+    // Try Cloudflare first (most secure)
+    if (await isCloudflareInstalled()) {
+      try {
+        console.log("[Tunnel] Auto-selecting Cloudflare (most secure)...");
+        const tunnel = await startCloudflareTunnel({ port });
+        console.log("[Tunnel] Cloudflare started:", tunnel.url);
+        return tunnel;
+      } catch (error: any) {
+        console.log("[Tunnel] Cloudflare failed:", error.message);
+      }
+    } else {
+      console.log("[Tunnel] Cloudflare not installed, skipping...");
+    }
+
+    // Try Ngrok second
+    if (await isNgrokInstalled()) {
+      try {
+        console.log("[Tunnel] Auto-selecting Ngrok...");
+        const tunnel = await startNgrokTunnel({ port });
+        console.log("[Tunnel] Ngrok started:", tunnel.url);
+        return tunnel;
+      } catch (error: any) {
+        console.log("[Tunnel] Ngrok failed:", error.message);
+      }
+    } else {
+      console.log("[Tunnel] Ngrok not installed, skipping...");
+    }
+
+    // Fall back to Localtunnel (always available, least secure)
+    console.log("[Tunnel] Auto-selecting Localtunnel (fallback - always available)...");
+    const tunnel = await startLocaltunnel({ port });
+    console.log("[Tunnel] Localtunnel started:", tunnel.url);
+    return tunnel;
+  }
+
+  // Specific provider requested
+  console.log(`[Tunnel] Using specific provider: ${provider}`);
+
+  switch (provider) {
+    case "cloudflare": {
+      if (!(await isCloudflareInstalled())) {
+        throw new Error("Cloudflare tunnel requested but cloudflared is not installed. Install from https://github.com/cloudflare/cloudflared");
+      }
+      const tunnel = await startCloudflareTunnel({ port });
+      console.log("[Tunnel] Cloudflare started:", tunnel.url);
+      return tunnel;
+    }
+    case "ngrok": {
+      if (!(await isNgrokInstalled())) {
+        throw new Error("Ngrok tunnel requested but @ngrok/ngrok is not installed. Run: npm install @ngrok/ngrok");
+      }
+      const tunnel = await startNgrokTunnel({ port });
+      console.log("[Tunnel] Ngrok started:", tunnel.url);
+      return tunnel;
+    }
+    case "localtunnel": {
+      const tunnel = await startLocaltunnel({ port });
+      console.log("[Tunnel] Localtunnel started:", tunnel.url);
+      return tunnel;
+    }
+    default:
+      throw new Error(`Unknown tunnel provider: ${provider}. Valid options: ${VALID_PROVIDERS.join(", ")}`);
+  }
+}
 
 function getOpenCodeBaseUrl(ctx: Parameters<Plugin>[0]): string | null {
   const serverUrl = (ctx as any)?.serverUrl;
@@ -543,25 +635,10 @@ async function handleTunnel(req: http.IncomingMessage, res: http.ServerResponse,
     try {
       const data = JSON.parse(body);
       const targetPort = data.port || openCodePort;
-      
+
       console.log("[Tunnel] Starting to port:", targetPort);
-      
-      let tunnel;
-      try {
-        tunnel = await startCloudflareTunnel({ port: targetPort });
-        console.log("[Tunnel] Cloudflare started:", tunnel.url);
-      } catch (cloudflareError: any) {
-        console.log("[Tunnel] Cloudflare failed, trying localtunnel...");
-        try {
-          tunnel = await startLocaltunnel({ port: targetPort });
-          console.log("[Tunnel] Localtunnel started:", tunnel.url);
-        } catch (localError: any) {
-          console.log("[Tunnel] Localtunnel failed, trying ngrok...");
-          tunnel = await startNgrokTunnel({ port: targetPort });
-          console.log("[Tunnel] Ngrok started:", tunnel.url);
-        }
-      }
-      
+
+      const tunnel = await startTunnelWithFallback(targetPort);
       activeTunnel = tunnel;
       await displayQRCode(tunnel.url);
 
@@ -795,8 +872,8 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
   // Auto-start tunnel pointing to OpenCode DIRECTLY (not through plugin!)
   debugLog("[DEV] Auto-starting tunnel...");
   try {
-    const tunnel = await startCloudflareTunnel({ port: openCodePort });
-    debugLog("[DEV] Cloudflare tunnel started:", tunnel.url);
+    const tunnel = await startTunnelWithFallback(openCodePort);
+    debugLog("[DEV] Tunnel started:", tunnel.url);
     activeTunnel = tunnel;
     await displayQRCode(tunnel.url);
 
@@ -808,42 +885,8 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
       tunnel.port,
       openCodePort
     );
-  } catch (cloudflareError: any) {
-    debugLog("[DEV] Cloudflare failed, trying localtunnel...");
-    try {
-      const tunnel = await startLocaltunnel({ port: openCodePort });
-      debugLog("[DEV] Localtunnel started:", tunnel.url);
-      activeTunnel = tunnel;
-      await displayQRCode(tunnel.url);
-
-      // Save tunnel metadata to .config/opencode/tunnel.json
-      updateTunnelMetadata(
-        tunnel.url,
-        tunnel.tunnelId,
-        tunnel.provider,
-        tunnel.port,
-        openCodePort
-      );
-    } catch (localError: any) {
-      debugLog("[DEV] Localtunnel failed, trying ngrok...");
-      try {
-        const tunnel = await startNgrokTunnel({ port: openCodePort });
-        debugLog("[DEV] Ngrok tunnel started:", tunnel.url);
-        activeTunnel = tunnel;
-        await displayQRCode(tunnel.url);
-
-        // Save tunnel metadata to .config/opencode/tunnel.json
-        updateTunnelMetadata(
-          tunnel.url,
-          tunnel.tunnelId,
-          tunnel.provider,
-          tunnel.port,
-          openCodePort
-        );
-      } catch (ngrokError: any) {
-        console.error("[DEV] All tunnels failed:", ngrokError.message);
-      }
-    }
+  } catch (tunnelError: any) {
+    console.error("[DEV] Failed to start tunnel:", tunnelError.message);
   }
 
   return {
