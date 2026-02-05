@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish
+      - name: Publish with OIDC
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
