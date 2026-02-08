@@ -1,6 +1,8 @@
 import { installPluginToGlobalOpenCodeConfig, installGlobalCommand } from "./opencode-config.js";
 import { MOBILE_COMMAND_NAME, getMobileCommandMarkdown } from "./mobile-command.js";
 import { spawn } from "child_process";
+import * as path from "path";
+import * as url from "url";
 
 const PLUGIN_SPEC = "opencode-mobile@latest";
 
@@ -63,8 +65,12 @@ COMMAND LOCATION:
 async function runTunnelSetup(): Promise<void> {
   return new Promise((resolve) => {
     console.log("\n🚀 Setting up tunnel provider for mobile notifications...\n");
-    
-    const child = spawn("node", ["./dist/src/cli/tunnel-setup.js"], {
+
+    // Resolve path relative to this file's location (src/cli/install.ts -> dist/src/cli/tunnel-setup.js)
+    const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+    const tunnelSetupPath = path.resolve(__dirname, "..", "cli", "tunnel-setup.js");
+
+    const child = spawn("node", [tunnelSetupPath], {
       stdio: "inherit",
       cwd: process.cwd(),
     });
