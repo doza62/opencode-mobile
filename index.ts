@@ -348,87 +348,7 @@ const cors = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-const MOBILE_COMMAND = "mobile";
 const TEST_PUSH_ENABLED = process.env.OPENCODE_MOBILE_TEST_PUSH === "1";
-
-function getMobileCommandMarkdown(): string {
-  return [
-    "---",
-    "description: OpenCode Mobile (QR + push token)",
-    "---",
-    "Call the `mobile` tool.",
-    "",
-    "Command arguments: $ARGUMENTS",
-    "",
-    "- If $ARGUMENTS is non-empty, call the tool with { token: \"$ARGUMENTS\" }.",
-    "- If $ARGUMENTS is empty, call the tool with no args to print the QR.",
-    "",
-    "Token format:",
-    "- `ExponentPushToken[xxxxxxxxxxxxxx]` - Register push token only",
-    "- `ExponentPushToken[xxx] ServerUrl[http://...]` - Register with custom server URL",
-    "",
-    "When to use ServerUrl:",
-    "- Use when the mobile app is connected directly to a local server",
-    "- The serverUrl will be used for notification deep links instead of tunnel",
-    "- Omit when using tunnel connection (default behavior)",
-    "",
-    "Important:",
-    "- Do not output analysis/thoughts.",
-    "- Only call the tool; return no extra text.",
-    "",
-    "Examples:",
-    "- `/mobile` - Show QR code for tunnel connection",
-    "- `/mobile ExponentPushToken[xxxxxxxxxxxxxx]` - Register token",
-    "- `/mobile ExponentPushToken[xxx] ServerUrl[http://192.168.1.100:4096]` - Register with custom URL",
-  ].join("\n");
-}
-
-async function ensureMobileCommandExists(ctx: Parameters<Plugin>[0]): Promise<void> {
-  const rawCtx = ctx as any;
-  const directory: string | undefined = rawCtx?.directory ?? rawCtx?.worktree;
-  if (!directory) {
-    return;
-  }
-
-  // Guard: In some OpenCode execution contexts, directory can be `/`.
-  // Never attempt to write `/.opencode/...` (will throw EROFS).
-  if (directory === path.parse(directory).root) {
-    return;
-  }
-
-  // Skip Command.list API - it's unreliable and times out frequently.
-  // Use filesystem check directly, which is faster and more reliable.
-  try {
-    const commandsDir = path.join(directory, ".opencode", "commands");
-    const commandPath = path.join(commandsDir, `${MOBILE_COMMAND}.md`);
-    const exists = await fs.promises
-      .access(commandPath)
-      .then(() => true)
-      .catch(() => false);
-
-    if (exists) {
-      // Best-effort auto-update for our own generated command.
-      try {
-        const current = await fs.promises.readFile(commandPath, "utf-8");
-        const next = getMobileCommandMarkdown();
-        const looksLikeOurs = current.includes("description: OpenCode Mobile (QR + push token)");
-        if (looksLikeOurs && current.trim() !== next.trim()) {
-          await fs.promises.writeFile(commandPath, next, "utf-8");
-          console.log(`[PushPlugin] Updated /${MOBILE_COMMAND} command at ${commandPath}`);
-        }
-      } catch {
-        // Ignore; command file may be locked or user-managed.
-      }
-      return;
-    }
-
-    await fs.promises.mkdir(commandsDir, { recursive: true });
-    await fs.promises.writeFile(commandPath, getMobileCommandMarkdown(), "utf-8");
-    console.log(`[PushPlugin] Installed /${MOBILE_COMMAND} command at ${commandPath}`);
-  } catch (error: unknown) {
-    console.error(`[PushPlugin] Failed to install /${MOBILE_COMMAND} command:`, error);
-  }
-}
 
 function formatMobileQrMessage(url: string, qr: string): string {
   if (!qr) {
@@ -827,12 +747,6 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
   debugLog("[PushPlugin] isServeMode:", isServeMode);
   debugLog("[PushPlugin] process.argv:", process.argv.join(", "));
 
-  // Never block plugin init on filesystem operations.
-  // This can hang on slow or flaky mounts (eg network filesystems).
-  setTimeout(() => {
-    void ensureMobileCommandExists(ctx);
-  }, 0);
-
   if (!isServeMode) {
     console.log(
       "[opencode-mobile] Plugin init OK; skipping (not in 'serve' mode). " +
@@ -928,7 +842,7 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
         const props = (event as any).properties ?? {};
         if (
           TEST_PUSH_ENABLED &&
-          props?.name === MOBILE_COMMAND &&
+          props?.name === "mobile" &&
           typeof props?.arguments === "string"
         ) {
           void sendPush({

@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+
+/**
+ * OpenCode Mobile Plugin - Uninstall Entry Point
+ * Run with: npx opencode-mobile-uninstall
+ */
+
+import { main } from "../dist/src/cli/uninstall.js";
+
+main().catch((error) => {
+  console.error("Fatal error:", error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

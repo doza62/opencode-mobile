@@ -19,6 +19,24 @@ export interface InstallPluginResult {
   pluginsAfter: string[];
 }
 
+export interface RemovePluginOptions {
+  dryRun?: boolean;
+}
+
+export interface RemovePluginResult {
+  configPath: string;
+  format: OpenCodeConfigFormat;
+  action: "removed" | "noop";
+  pluginSpec: string;
+  pluginsBefore: string[];
+  pluginsAfter: string[];
+}
+
+export interface RemoveCommandResult {
+  commandPath: string;
+  action: "removed" | "noop";
+}
+
 const OPENCODE_SCHEMA_URL = "https://opencode.ai/config.json";
 
 function resolveGlobalConfigPath(): {
@@ -147,5 +165,144 @@ export function installPluginToGlobalOpenCodeConfig(
     pluginSpec,
     pluginsBefore,
     pluginsAfter,
+  };
+}
+
+function removePlugin(plugins: string[], pluginSpec: string): { next: string[]; changed: boolean } {
+  const name = pluginSpec.split("@")[0] || pluginSpec;
+  const existingIndex = plugins.findIndex((p) => p === name || p.startsWith(`${name}@`));
+  if (existingIndex === -1) {
+    return { next: plugins, changed: false };
+  }
+
+  const next = [...plugins];
+  next.splice(existingIndex, 1);
+  return { next, changed: true };
+}
+
+export function removePluginFromGlobalOpenCodeConfig(
+  pluginSpec: string,
+  options: RemovePluginOptions = {},
+): RemovePluginResult {
+  const { configPath, format, existed } = resolveGlobalConfigPath();
+
+  if (!existed) {
+    return {
+      configPath,
+      format,
+      action: "noop",
+      pluginSpec,
+      pluginsBefore: [],
+      pluginsAfter: [],
+    };
+  }
+
+  const raw = fs.readFileSync(configPath, "utf-8");
+  const errors: ParseError[] = [];
+  const parsed: unknown = parse(raw, errors, { allowTrailingComma: true });
+  if (errors.length > 0) {
+    const first = errors[0];
+    throw new Error(
+      `Failed to parse ${configPath} (offset ${first.offset}, length ${first.length}). ` +
+        "Fix the JSON/JSONC and retry.",
+    );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`Unexpected OpenCode config shape in ${configPath}. Expected an object.`);
+  }
+
+  const configObj = parsed as Record<string, unknown>;
+  const pluginsBefore = normalizePluginList(configObj.plugin);
+  const { next: pluginsAfter, changed } = removePlugin(pluginsBefore, pluginSpec);
+
+  if (!changed) {
+    return {
+      configPath,
+      format,
+      action: "noop",
+      pluginSpec,
+      pluginsBefore,
+      pluginsAfter,
+    };
+  }
+
+  const edits = modify(raw, ["plugin"], pluginsAfter, {
+    formattingOptions: {
+      insertSpaces: true,
+      tabSize: 2,
+      eol: "\n",
+    },
+  });
+  const updated = ensureTrailingNewline(applyEdits(raw, edits));
+
+  if (!options.dryRun) {
+    fs.writeFileSync(configPath, updated, "utf-8");
+  }
+
+  return {
+    configPath,
+    format,
+    action: "removed",
+    pluginSpec,
+    pluginsBefore,
+    pluginsAfter,
+  };
+}
+
+export function removeGlobalCommand(commandName: string): RemoveCommandResult {
+  const commandsDir = path.join(os.homedir(), ".config", "opencode", "commands");
+  const commandPath = path.join(commandsDir, `${commandName}.md`);
+
+  if (!fs.existsSync(commandPath)) {
+    return {
+      commandPath,
+      action: "noop",
+    };
+  }
+
+  fs.unlinkSync(commandPath);
+  return {
+    commandPath,
+    action: "removed",
+  };
+}
+
+export function installGlobalCommand(
+  commandName: string,
+  content: string,
+  options: { dryRun?: boolean } = {},
+): { commandPath: string; action: "created" | "updated" | "noop" } {
+  const commandsDir = path.join(os.homedir(), ".config", "opencode", "commands");
+  const commandPath = path.join(commandsDir, `${commandName}.md`);
+
+  const existed = fs.existsSync(commandPath);
+
+  if (existed) {
+    const current = fs.readFileSync(commandPath, "utf-8");
+    if (current.trim() === content.trim()) {
+      return {
+        commandPath,
+        action: "noop",
+      };
+    }
+
+    if (!options.dryRun) {
+      fs.writeFileSync(commandPath, content, "utf-8");
+    }
+    return {
+      commandPath,
+      action: "updated",
+    };
+  }
+
+  if (!options.dryRun) {
+    fs.mkdirSync(commandsDir, { recursive: true });
+    fs.writeFileSync(commandPath, content, "utf-8");
+  }
+
+  return {
+    commandPath,
+    action: "created",
   };
 }

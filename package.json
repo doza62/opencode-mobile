@@ -8,7 +8,8 @@
   "bin": {
     "opencode-mobile": "./bin/audit",
     "opencode-mobile-qr": "./bin/qr",
-    "opencode-mobile-tunnel-setup": "./dist/src/cli/tunnel-setup.js"
+    "opencode-mobile-tunnel-setup": "./dist/src/cli/tunnel-setup.js",
+    "opencode-mobile-uninstall": "./bin/uninstall"
   },
   "exports": {
     ".": {
@@ -30,6 +31,10 @@
     "./tunnel-setup": {
       "import": "./dist/src/cli/tunnel-setup.js",
       "types": "./dist/src/cli/tunnel-setup.d.ts"
+    },
+    "./uninstall": {
+      "import": "./dist/src/cli/uninstall.js",
+      "types": "./dist/src/cli/uninstall.d.ts"
     }
   },
   "files": [
