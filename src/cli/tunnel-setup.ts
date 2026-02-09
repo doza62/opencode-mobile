@@ -290,16 +290,16 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
 
   if (!isCloudflaredInstalled()) {
     console.log("⚠️  cloudflared is not installed.");
-    const install = await prompt("Would you like to install it now? (y/n): ");
-
-    if (install.toLowerCase() === "y") {
-      const success = await installCloudflared();
-      if (!success) {
-        console.log("\n❌ Installation failed. Please install manually and try again.");
-        return;
-      }
-    } else {
-      console.log("\n❌ cloudflared is required. Setup cancelled.");
+    console.log("📦 Attempting automatic installation...\n");
+    
+    const success = await installCloudflared();
+    if (!success) {
+      console.log("\n❌ Automatic installation failed.");
+      console.log("   Please install cloudflared manually:");
+      console.log("   macOS: brew install cloudflared");
+      console.log("   Linux: curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i /tmp/cloudflared.deb");
+      console.log("   Windows: Download from https://github.com/cloudflare/cloudflared/releases");
+      console.log("\n   After installation, run: npx opencode-mobile tunnel-setup\n");
       return;
     }
   }

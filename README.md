@@ -1,291 +1,223 @@
 # OpenCode Mobile Plugin
 
-A mobile push notification plugin for OpenCode, built with TypeScript and Bun runtime. The plugin provides push notification capabilities through Expo Push Notifications service, with tunnel management for mobile device connectivity.
-
-## Features
-
-- **Push Notifications**: Send push notifications via Expo Push Notifications service
-- **Tunnel Management**: Support for Cloudflare and ngrok tunnels for mobile device connectivity
-- **Reverse Proxy**: Built-in HTTP proxy server for handling notifications
-- **QR Code Support**: Generate QR codes for easy tunnel URL sharing
+Mobile push notifications for OpenCode via Expo. Connect your phone to receive notifications when OpenCode generates responses, even when you're away from your computer.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) runtime (v1.0+)
-- TypeScript 5.0+
-- Valid Expo account and project credentials
+- [OpenCode CLI](https://opencode.ai) installed and configured
+- Node.js or Bun runtime
+- Mobile device with OpenCode Mobile app (or Expo Go)
 
-## Installation
+## Quick Start
 
-```bash
-# Install dependencies
-bun install
-```
-
-## Usage
-
-### Run the Main Plugin
+### Step 1: Install the Plugin
 
 ```bash
-bun run index.ts
+npx opencode-mobile install
 ```
 
-### Run Push Notifications Directly
+**What this does:**
+- Installs `opencode-mobile@latest` plugin to your global OpenCode config
+- Creates the `/mobile` command (available in all projects)
+- Sets up tunnel provider configuration for mobile connectivity
+
+**Expected output:**
+```
+✅ Updated ~/.config/opencode/opencode.json
+   plugin: ["opencode-mobile@latest"]
+
+✅ Created /mobile command at ~/.config/opencode/commands/mobile.md
+
+🚀 Setting up tunnel provider for mobile notifications...
+
+🎉 Installation complete!
+   Restart OpenCode (run `opencode`) to load the plugin.
+   Use `/mobile` in any project to access mobile features.
+```
+
+### Step 2: Start OpenCode
 
 ```bash
-bun run push-notifications.ts
+opencode attach
 ```
 
-### Build and Type-Check
+Or start a new session:
 
 ```bash
-# Type-check only (no emit)
-npx tsc --noEmit
-
-# Compile TypeScript to JavaScript
-npx tsc
-
-# Build and type-check
-npm run build
+opencode serve
 ```
 
-### Linting
+**What you'll see:**
+```
+[opencode-mobile] v1.3.2
+[PushPlugin][Mobile] Entry loaded: index.ts
 
-```bash
-npx eslint "**/*.ts" --fix
+Connecting to OpenCode...
+Connected! Session ID: abc123
+
+>
 ```
 
-### Testing
+### Step 3: Get Your QR Code
 
-```bash
-bun test
-bun test <test-file>.test.ts
-bun test --test-name-pattern="test name"
-```
-
-## Project Structure
+Inside OpenCode, type:
 
 ```
-/Users/rodri/.config/opencode/opencode-mobile-plugin/
-├── index.ts                    # Main barrel export
-├── push-notifications.ts       # Core plugin logic (main entry point)
-├── tunnel-manager.ts           # Tunnel management (Cloudflare/ngrok)
-├── reverse-proxy.ts            # HTTP proxy server
-├── hello-world.ts              # Example plugin
-├── tsconfig.json               # TypeScript configuration
-├── package.json                # Dependencies and scripts
-├── AGENTS.md                   # Agent instructions and project guidelines
-└── dist/                       # Compiled output
+/mobile
 ```
+
+**What you'll see:**
+```
+> /mobile
+
+┌─────────────────┐
+│ █▀▀▀▀▀█ ▀▄▀▄▀▄  │
+│ █ ███ █  ▄▀ ▄▀  │
+│ █ ▀▀▀ █ ▀▄▀▄▀▄  │
+│ ▀▀▀▀▀▀▀ ▀▄█▄▀▄  │
+│ ▀▄▀▄▀▄▀ █▄▀▄▀▄  │
+└─────────────────┘
+
+https://your-tunnel-url.ngrok.io
+```
+
+### Step 4: Connect Your Phone
+
+1. **Install the OpenCode Mobile app** (or use Expo Go)
+2. **Open the app** and look for the QR scanner
+3. **Scan the QR code** displayed in Step 3
+4. **Done!** Your device is now registered for push notifications
+
+## How It Works
+
+```
+┌─────────────┐      ┌──────────────┐      ┌─────────────────┐
+│   OpenCode  │──────▶│   Tunnel     │──────▶│  Mobile Device  │
+│   Server    │      │  (ngrok/etc) │      │  (Push Notify)  │
+└─────────────┘      └──────────────┘      └─────────────────┘
+```
+
+1. **Tunnel**: Creates a secure public URL that your phone can reach
+2. **QR Code**: Encodes the tunnel URL for easy scanning
+3. **Push Token**: Your phone registers its Expo push token with the plugin
+4. **Notifications**: OpenCode events trigger push notifications to your device
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/mobile` | Display QR code for mobile connection |
+| `/mobile ExponentPushToken[xxx]` | Manually register a push token |
+| `npx opencode-mobile qr <tunnels.json>` | Show QR from tunnel file |
+| `npx opencode-mobile audit` | Run endpoint audit |
+| `npx opencode-mobile uninstall` | Remove plugin globally |
 
 ## Configuration
 
 ### Environment Variables
 
-- `OPENCODE_PORT`: Port for the local server (default: 3000)
-- `EXPO_PROJECT_ID`: Your Expo project ID
-- `TUNNEL_PROVIDER`: Tunnel provider to use (`cloudflare` or `ngrok`)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TUNNEL_PROVIDER` | Tunnel provider (`auto`, `ngrok`, `cloudflare`, `localtunnel`) | `auto` |
+| `OPENCODE_MOBILE_DEBUG` | Enable debug logging (`1` to enable) | disabled |
+| `OPENCODE_PORT` | Local server port | `3000` |
 
-### Tunnel Configuration
+### Tunnel Providers
 
-The plugin supports two tunnel providers:
+The plugin automatically tries providers in this order:
 
-1. **Cloudflare** (`cloudflared`): Zero-config tunnel with Cloudflare's secure infrastructure
-2. **ngrok**: Popular ngrok tunnel with custom domain support
+1. **ngrok** - Popular tunnel service (requires auth token)
+2. **Cloudflare** - Zero-config tunnel via cloudflared
+3. **Localtunnel** - Simple, free tunnel option
 
-## Code Style Guidelines
+### Installing ngrok (Optional)
 
-### Imports
+For the best experience with stable URLs:
 
-```typescript
-// Standard library - namespace imports
-import * as fs from "fs";
-import * as path from "path";
+```bash
+# macOS
+brew install ngrok
 
-// External modules - named or default imports
-import ngrok from "ngrok";
-import qrcode from "qrcode";
-
-// Types - use import type when only using types
-import type { Plugin } from "@opencode-ai/plugin";
-import type { TunnelConfig } from "./tunnel-manager";
-
-// Group imports logically: types → external modules → internal modules
-import type { Plugin } from "@opencode-ai/plugin";
-import * as fs from "fs";
-import * as path from "path";
-import { startTunnel } from "./tunnel-manager";
+# Get your authtoken from https://dashboard.ngrok.com
+ngrok config add-authtoken YOUR_TOKEN
 ```
 
-### Formatting
+## Troubleshooting
 
-- **2 spaces** for indentation
-- **Single quotes** for strings
-- **Semicolons** at end of statements
-- **Trailing commas** in multi-line objects/arrays
-- **Max line length**: ~100 characters (soft limit)
+### "No tunnel URL found"
 
-### Types
+**Problem**: Tunnel failed to start
 
-```typescript
-// Use interfaces for object shapes
-interface PushToken {
-  token: string;
-  platform: "ios" | "android";
-  deviceId: string;
-  registeredAt: string;
-}
+**Solutions:**
+```bash
+# Check tunnel provider is installed
+which ngrok
+which cloudflared
 
-// Use type aliases for unions/primitives
-type NotificationHandler = (notification: Notification) => Promise<void>;
+# Run tunnel setup manually
+npx opencode-mobile tunnel-setup
 
-// Explicit return types for public functions
-function loadTokens(): PushToken[] {
-  // ...
-}
-
-// Avoid `any` - use `unknown` with type guards when uncertain
-function safeParse(data: unknown): Record<string, any> {
-  if (typeof data === "string") {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
-}
+# Or skip tunnel setup during install
+npx opencode-mobile install --skip-tunnel-setup
 ```
 
-### Naming Conventions
+### "Push token not registering"
 
-| Pattern | Convention | Example |
-|---------|------------|---------|
-| Constants | UPPER_SNAKE_CASE | `TOKEN_FILE`, `BUN_SERVER_PORT` |
-| Functions/variables | camelCase | `loadTokens`, `startTunnel` |
-| Interfaces/classes | PascalCase | `PushToken`, `TunnelConfig` |
-| Private/internal | prefix with `_` | `_bunServer`, `_pluginInitialized` |
-| Booleans | prefix with `is`, `has`, `should` | `isRunning`, `hasStarted` |
+**Problem**: Device can't reach the plugin server
 
-### Error Handling
+**Solutions:**
+- Ensure your phone and computer are on the same network (for LAN mode)
+- Check that the tunnel URL is accessible from your phone's browser
+- Verify the QR code scanned correctly (compare the URL)
 
-```typescript
-// Always wrap async operations in try-catch
-try {
-  await someAsyncOperation();
-} catch (error: any) {
-  // Log errors with module prefix
-  console.error("[ModuleName] Error message:", error.message);
-  
-  // Provide context in error messages
-  if (error.message?.includes("specific case")) {
-    console.error("[PushPlugin] Handle specific error:", error.message);
-  } else {
-    console.error("[PushPlugin] Unexpected error:", error.message);
-  }
-}
+### Plugin not loading
 
-// Handle specific error types when possible
-if (error instanceof ValidationError) {
-  // Handle validation errors
-}
+**Problem**: OpenCode doesn't recognize the plugin
+
+**Solutions:**
+```bash
+# Verify installation
+npx opencode-mobile --help
+
+# Check global config
+cat ~/.config/opencode/opencode.json
+
+# Reinstall
+npx opencode-mobile uninstall --yes
+npx opencode-mobile install
 ```
 
-### Console Logging
+### Reset Everything
 
-- Use **module prefixes** in all console output: `[PushPlugin]`, `[Tunnel]`, `[Proxy]`
-- Use **emojis** for status indicators: `✅`, `❌`, `💡`, `ℹ️`
-- Log important steps and results
+```bash
+# Uninstall plugin
+npx opencode-mobile uninstall --yes
 
-```typescript
-console.log('[PushPlugin] Starting...');
-console.error('[PushPlugin] Failed:', error.message);
-console.log(`[Tunnel] URL: ${url}`);
-console.log('✅ Server started successfully');
-console.log('❌ Connection failed:', error.message);
+# Clear stored tokens
+rm ~/.config/opencode/mobile-tokens.json
+
+# Reinstall
+npx opencode-mobile install
 ```
 
-### Async/Await
+## Project Structure
 
-```typescript
-// Use async/await over raw promises
-async function startServer(): Promise<void> {
-  try {
-    await startProxy();
-    await startTunnel();
-  } catch (error) {
-    // handle error
-  }
-}
-
-// Never leave promises unhandled
-// Use Promise.all() for parallel operations
-const [result1, result2] = await Promise.all([
-  operation1(),
-  operation2(),
-]);
+```
+opencode-mobile/
+├── index.ts              # Main plugin entry point
+├── src/
+│   ├── tunnel/          # Tunnel providers (ngrok, cloudflare, localtunnel)
+│   ├── push/            # Push notification logic
+│   └── cli/             # CLI commands (install, qr, audit, etc.)
+├── bin/                 # CLI entry points
+├── dist/                # Compiled output
+└── package.json
 ```
 
-## Plugin Architecture
+## Contributing
 
-### Entry Points
-
-- **Main entry**: `index.ts` (barrel export)
-- **Plugin entry**: `push-notifications.ts` (main plugin logic)
-- **Compiled output**: `dist/index.js`
-
-### Plugin Interface
-
-All plugins must export a function matching the `Plugin` type from `@opencode-ai/plugin`:
-
-```typescript
-import type { Plugin } from "@opencode-ai/plugin";
-
-export const MyPlugin: Plugin = async (ctx) => {
-  // Initialize plugin
-  return {
-    event: async ({ event }) => {
-      // Handle event
-    },
-  };
-};
-
-export default MyPlugin;
-```
-
-### Signal Handling
-
-```typescript
-// Handle process signals for graceful shutdown
-const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
-signals.forEach((signal) => {
-  process.on(signal, async () => {
-    await gracefulShutdown();
-    process.exit(0);
-  });
-});
-```
-
-## Dependencies
-
-- `@opencode-ai/plugin`: Core plugin interface
-- `ngrok`: Ngrok tunnel provider
-- `cloudflared`: Cloudflare tunnel provider
-- `qrcode`: QR code generation
-- `bun`: Runtime environment
+See [AGENTS.md](./AGENTS.md) for development guidelines and project structure.
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the code style guidelines
-4. Run linting and tests
-5. Submit a pull request
-
-## Support
-
-For issues and feature requests, please use the GitHub issue tracker.
