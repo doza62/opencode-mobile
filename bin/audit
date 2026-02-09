@@ -9,6 +9,7 @@ import { main as auditMain } from "../dist/src/cli/index.js";
 import { main as qrMain } from "../dist/src/cli/qr.js";
 import { main as installMain } from "../dist/src/cli/install.js";
 import { main as uninstallMain } from "../dist/src/cli/uninstall.js";
+import { main as updateMain } from "../dist/src/cli/update.js";
 
 const args = process.argv.slice(2);
 const subcommand = args[0];
@@ -34,7 +35,11 @@ const run = async () => {
     return;
   }
 
-  // Show help for unknown commands or no command
+  if (subcommand === "update") {
+    await updateMain(args.slice(1));
+    return;
+  }
+
   if (subcommand === "--help" || subcommand === "-h" || !subcommand) {
     console.log(`
 OpenCode Mobile Plugin
@@ -45,11 +50,13 @@ USAGE:
 COMMANDS:
   install       Install the plugin globally
   uninstall     Remove the plugin globally
+  update        Update to the latest version
   audit         Run endpoint audit
   qr            Show QR code for mobile connection
 
 EXAMPLES:
   npx opencode-mobile install
+  npx opencode-mobile update
   npx opencode-mobile uninstall --yes
   npx opencode-mobile audit --tunnel-only
 `);

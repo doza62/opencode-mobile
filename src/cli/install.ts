@@ -1,5 +1,6 @@
 import { installPluginToGlobalOpenCodeConfig, installGlobalCommand } from "./opencode-config.js";
 import { MOBILE_COMMAND_NAME, getMobileCommandMarkdown } from "./mobile-command.js";
+import { checkForUpdates, getUpdateCommand } from "./version-check.js";
 import { spawn } from "child_process";
 import * as path from "path";
 import * as url from "url";
@@ -85,11 +86,27 @@ async function runTunnelSetup(): Promise<void> {
   });
 }
 
+async function checkVersionAndPrompt(): Promise<void> {
+  try {
+    console.log("🔍 Checking for updates...\n");
+    const versionInfo = await checkForUpdates();
+
+    if (versionInfo.updateAvailable) {
+      console.log(`📦 Update available: ${versionInfo.currentVersion} → ${versionInfo.latestVersion}\n`);
+      console.log("The plugin will be updated to the latest version.\n");
+    }
+  } catch {}
+}
+
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(args);
   if (options.help) {
     showHelp();
     return;
+  }
+
+  if (!options.dryRun) {
+    await checkVersionAndPrompt();
   }
 
   const prefix = options.dryRun ? "[Dry Run] " : "";

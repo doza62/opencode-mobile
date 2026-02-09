@@ -28,6 +28,10 @@
       "import": "./dist/src/cli/install.js",
       "types": "./dist/src/cli/install.d.ts"
     },
+    "./update": {
+      "import": "./dist/src/cli/update.js",
+      "types": "./dist/src/cli/update.d.ts"
+    },
     "./tunnel-setup": {
       "import": "./dist/src/cli/tunnel-setup.js",
       "types": "./dist/src/cli/tunnel-setup.d.ts"
