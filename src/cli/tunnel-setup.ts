@@ -128,7 +128,7 @@ function prompt(question: string): Promise<string> {
 
 function isCloudflaredInstalled(): boolean {
   try {
-    execSync("which cloudflared", { stdio: "ignore" });
+    execSync("command -v cloudflared", { stdio: "ignore" });
     return true;
   } catch {
     return false;

@@ -161,7 +161,7 @@ export async function stopCloudflareTunnel(): Promise<void> {
 
 function isCloudflaredInPath(): boolean {
   try {
-    execSync("which cloudflared", { stdio: "ignore" });
+    execSync("command -v cloudflared", { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -169,10 +169,7 @@ function isCloudflaredInPath(): boolean {
 }
 
 export async function isCloudflareInstalled(): Promise<boolean> {
-  const foundInPaths = findCloudflared() !== null;
-  const foundInPath = isCloudflaredInPath();
-  console.log(`[Cloudflare] Checking installation: hardcoded paths=${foundInPaths}, PATH=${foundInPath}`);
-  return foundInPaths || foundInPath;
+  return findCloudflared() !== null || isCloudflaredInPath();
 }
 
 /**
