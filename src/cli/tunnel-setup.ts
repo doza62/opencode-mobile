@@ -13,6 +13,7 @@ interface CliOptions {
   noTui: boolean;
   provider?: Provider;
   authtoken?: string;
+  cloudflareAuthtoken?: string;
   domain?: string;
 }
 
@@ -59,6 +60,12 @@ function parseArgs(args: string[]): CliOptions {
         i++;
         if (i < args.length) {
           options.authtoken = args[i];
+        }
+        break;
+      case "--cloudflare-authtoken":
+        i++;
+        if (i < args.length) {
+          options.cloudflareAuthtoken = args[i];
         }
         break;
       case "--domain":
@@ -243,8 +250,7 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
       process.exit(1);
     }
 
-    if (options.domain) {
-      // Custom domain setup
+    if (options.domain && options.cloudflareAuthtoken) {
       const config: TunnelConfig = {
         provider: "cloudflare",
         mode: "custom",
@@ -263,8 +269,19 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
           2
         )
       );
+    } else if (options.domain && !options.cloudflareAuthtoken) {
+      const output = {
+        status: "error",
+        message: "Cloudflare custom domain requires --cloudflare-authtoken",
+        action: "provide_authtoken",
+        instructions: "Provide --cloudflare-authtoken for custom domain setup",
+      };
+      console.log(JSON.stringify(output, null, 2));
+      process.exit(1);
     } else {
-      // Free tier setup
+      console.log("ℹ️  Using Cloudflare free tier (trycloudflare.com)");
+      console.log("   For custom domains, provide --cloudflare-authtoken and --domain\n");
+      
       const config: TunnelConfig = {
         provider: "cloudflare",
         mode: "free",
