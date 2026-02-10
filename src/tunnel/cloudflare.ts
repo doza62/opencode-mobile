@@ -169,7 +169,10 @@ function isCloudflaredInPath(): boolean {
 }
 
 export async function isCloudflareInstalled(): Promise<boolean> {
-  return findCloudflared() !== null || isCloudflaredInPath();
+  const foundInPaths = findCloudflared() !== null;
+  const foundInPath = isCloudflaredInPath();
+  console.log(`[Cloudflare] Checking installation: hardcoded paths=${foundInPaths}, PATH=${foundInPath}`);
+  return foundInPaths || foundInPath;
 }
 
 /**
