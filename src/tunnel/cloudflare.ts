@@ -161,7 +161,7 @@ export async function stopCloudflareTunnel(): Promise<void> {
 
 function isCloudflaredInPath(): boolean {
   try {
-    execSync("command -v cloudflared", { stdio: "ignore" });
+    execSync("cloudflared --version", { stdio: "ignore" });
     return true;
   } catch {
     return false;
