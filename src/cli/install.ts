@@ -1,9 +1,10 @@
 import { installPluginToGlobalOpenCodeConfig, installGlobalCommand } from "./opencode-config.js";
 import { MOBILE_COMMAND_NAME, getMobileCommandMarkdown } from "./mobile-command.js";
-import { checkForUpdates, getUpdateCommand } from "./version-check.js";
+import { checkForUpdates, executeUpdate } from "./version-check.js";
 import { spawn } from "child_process";
 import * as path from "path";
 import * as url from "url";
+import { createInterface } from "readline";
 
 const PLUGIN_SPEC = "opencode-mobile@latest";
 
@@ -86,16 +87,43 @@ async function runTunnelSetup(): Promise<void> {
   });
 }
 
-async function checkVersionAndPrompt(): Promise<void> {
+function prompt(question: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function checkVersionAndPrompt(): Promise<boolean> {
   try {
     console.log("🔍 Checking for updates...\n");
     const versionInfo = await checkForUpdates();
 
     if (versionInfo.updateAvailable) {
-      console.log(`📦 Update available: ${versionInfo.currentVersion} → ${versionInfo.latestVersion}\n`);
-      console.log("The plugin will be updated to the latest version.\n");
+      console.log(`📦 A new version is available!`);
+      console.log(`   Your version: ${versionInfo.currentVersion}`);
+      console.log(`   Latest:       ${versionInfo.latestVersion}\n`);
+
+      const answer = await prompt("Would you like to update? (y/n): ");
+
+      if (answer.toLowerCase() === "y" || answer.toLowerCase() === "yes") {
+        console.log("\n📥 Updating...\n");
+        const success = await executeUpdate();
+        return success;
+      } else {
+        console.log("\n⏩ Continuing with current version...\n");
+        return false;
+      }
     }
   } catch {}
+  return false;
 }
 
 export async function main(args: string[] = process.argv.slice(2)): Promise<void> {

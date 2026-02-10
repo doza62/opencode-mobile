@@ -8,7 +8,7 @@
  * - Clean separation of concerns
  */
 
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, execSync } from "child_process";
 import type { TunnelConfig, TunnelInfo } from "./types";
 
 // Export types for external use
@@ -59,14 +59,6 @@ export function createCloudflareTunnel(
     return Promise.reject(new Error("Invalid port: must be a number"));
   }
 
-  // Find cloudflared
-  const cloudflaredPath = findCloudflareD(CLOUDFLARED_PATHS, existsSyncFn);
-  if (!cloudflaredPath) {
-    return Promise.reject(
-      new Error("cloudflared not found. Install from https://github.com/cloudflare/cloudflared")
-    );
-  }
-
   const spawnModule = spawnFn || spawn;
 
   return new Promise((resolve, reject) => {
@@ -75,7 +67,7 @@ export function createCloudflareTunnel(
       60000
     );
 
-    const process = spawnModule(cloudflaredPath, [
+    const process = spawnModule("cloudflared", [
       "tunnel",
       "--url",
       `http://127.0.0.1:${config.port}`,
@@ -167,11 +159,17 @@ export async function stopCloudflareTunnel(): Promise<void> {
   _url = null;
 }
 
-/**
- * Check if cloudflared is installed
- */
+function isCloudflaredInPath(): boolean {
+  try {
+    execSync("which cloudflared", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function isCloudflareInstalled(): Promise<boolean> {
-  return findCloudflared() !== null;
+  return findCloudflared() !== null || isCloudflaredInPath();
 }
 
 /**
