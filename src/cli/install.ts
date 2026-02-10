@@ -13,6 +13,7 @@ type InstallCliOptions = {
   dryRun: boolean;
   skipTunnelSetup: boolean;
   skipCommandInstall: boolean;
+  skipUpdateCheck: boolean;
 };
 
 function parseArgs(args: string[]): InstallCliOptions {
@@ -21,6 +22,7 @@ function parseArgs(args: string[]): InstallCliOptions {
     dryRun: false,
     skipTunnelSetup: false,
     skipCommandInstall: false,
+    skipUpdateCheck: false,
   };
 
   for (const arg of args) {
@@ -32,6 +34,8 @@ function parseArgs(args: string[]): InstallCliOptions {
       options.skipTunnelSetup = true;
     } else if (arg === "--skip-command-install") {
       options.skipCommandInstall = true;
+    } else if (arg === "--skip-update-check") {
+      options.skipUpdateCheck = true;
     }
   }
 
@@ -44,17 +48,24 @@ OpenCode Mobile Plugin - Installer
 
 USAGE:
   npx opencode-mobile install [OPTIONS]
+  npx opencode-mobile@<version> install [OPTIONS]
 
 OPTIONS:
   --dry-run              Print changes without writing files
   --skip-tunnel-setup    Skip tunnel provider setup
   --skip-command-install Skip installing the /mobile command globally
+  --skip-update-check    Skip checking for newer versions
   -h, --help             Show this help message
 
 WHAT IT DOES:
   1. Adds "${PLUGIN_SPEC}" to the "plugin" array in your global OpenCode config
   2. Installs the "/mobile" command globally (available in all projects)
   3. (Optional) Runs tunnel provider setup for mobile push notifications
+
+EXAMPLES:
+  npx opencode-mobile install
+  npx opencode-mobile@1.3.3 install
+  npx opencode-mobile install --skip-update-check
 
 CONFIG LOCATION:
   ~/.config/opencode/opencode.json (or opencode.jsonc)
@@ -133,7 +144,7 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<void
     return;
   }
 
-  if (!options.dryRun) {
+  if (!options.dryRun && !options.skipUpdateCheck) {
     await checkVersionAndPrompt();
   }
 
