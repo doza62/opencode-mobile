@@ -10,6 +10,7 @@ import { main as qrMain } from "../dist/src/cli/qr.js";
 import { main as installMain } from "../dist/src/cli/install.js";
 import { main as uninstallMain } from "../dist/src/cli/uninstall.js";
 import { main as updateMain } from "../dist/src/cli/update.js";
+import { main as filtersMain } from "../dist/src/cli/filters.js";
 
 const args = process.argv.slice(2);
 const subcommand = args[0];
@@ -40,6 +41,11 @@ const run = async () => {
     return;
   }
 
+  if (subcommand === "filters") {
+    await filtersMain(args.slice(1));
+    return;
+  }
+
   if (subcommand === "--help" || subcommand === "-h" || !subcommand) {
     console.log(`
 OpenCode Mobile Plugin
@@ -51,12 +57,14 @@ COMMANDS:
   install       Install the plugin globally
   uninstall     Remove the plugin globally
   update        Update to the latest version
+  filters       Manage notification filters
   audit         Run endpoint audit
   qr            Show QR code for mobile connection
 
 EXAMPLES:
   npx opencode-mobile install
   npx opencode-mobile update
+  npx opencode-mobile filters status
   npx opencode-mobile uninstall --yes
   npx opencode-mobile audit --tunnel-only
 `);

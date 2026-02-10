@@ -4,6 +4,7 @@
 
 import type { Notification, NotificationEvent, PluginContext } from "./types";
 import { truncate } from "./token-store";
+import { loadFilterConfig, shouldFilterSession } from "./filters";
 
 const DEBUG_ENABLED = process.env.OPENCODE_MOBILE_DEBUG === "1";
 const debugLog = (...args: unknown[]): void => {
@@ -185,6 +186,11 @@ export function formatNotification(
   }
 
   if (sessionTitleForFiltering && hasBracketTag(sessionTitleForFiltering)) {
+    return null;
+  }
+
+  const filterConfig = loadFilterConfig();
+  if (shouldFilterSession(sessionTitleForFiltering, filterConfig)) {
     return null;
   }
 
