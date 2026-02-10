@@ -23,6 +23,7 @@ interface TunnelConfig {
   domain?: string;
   tunnelName?: string;
   authtokenConfigured?: boolean;
+  cloudflaredPath?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "opencode-mobile");
@@ -149,35 +150,154 @@ function isNgrokInstalled(): boolean {
   }
 }
 
-async function installCloudflared(): Promise<boolean> {
+function findCloudflaredPath(): string | null {
+  const platform = os.platform();
+
+  if (platform === "win32") {
+    const winPaths = [
+      "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe",
+      "C:\\Program Files\\cloudflared\\cloudflared.exe",
+      `${process.env.USERPROFILE}\\scoop\\shims\\cloudflared.exe`,
+      `${process.env.USERPROFILE}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Cloudflare.cloudflared*\\cloudflared.exe`,
+    ];
+    for (const p of winPaths) {
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  }
+
+  const paths = [
+    "/opt/homebrew/bin/cloudflared",
+    "/usr/local/bin/cloudflared",
+    "/usr/bin/cloudflared",
+    `${process.env.HOME}/.linuxbrew/bin/cloudflared`,
+    "/home/linuxbrew/.linuxbrew/bin/cloudflared",
+  ];
+
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+function detectLinuxPackageManager(): "apt" | "yum" | "dnf" | null {
+  try {
+    execSync("which apt-get", { stdio: "ignore" });
+    return "apt";
+  } catch {
+    try {
+      execSync("which dnf", { stdio: "ignore" });
+      return "dnf";
+    } catch {
+      try {
+        execSync("which yum", { stdio: "ignore" });
+        return "yum";
+      } catch {
+        return null;
+      }
+    }
+  }
+}
+
+async function installCloudflared(): Promise<string | null> {
   const platform = os.platform();
 
   if (platform === "darwin") {
-    console.log("📦 Installing cloudflared via Homebrew...");
+    console.log("📦 Installing cloudflared via Homebrew (official)...");
     try {
       execSync("brew install cloudflared", { stdio: "inherit" });
-      return true;
+      const cloudflaredPath = findCloudflaredPath();
+      if (cloudflaredPath) {
+        console.log(`✅ cloudflared installed at: ${cloudflaredPath}`);
+        return cloudflaredPath;
+      }
+      return null;
     } catch (error) {
       console.error("❌ Failed to install cloudflared via Homebrew");
-      return false;
+      return null;
     }
   } else if (platform === "linux") {
-    console.log("📦 Installing cloudflared via curl...");
+    const pkgManager = detectLinuxPackageManager();
+
+    if (pkgManager === "apt") {
+      console.log("📦 Installing cloudflared via Cloudflare APT repository (official)...");
+      try {
+        execSync(
+          "sudo mkdir -p --mode=0755 /usr/share/keyrings && curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null",
+          { stdio: "inherit" }
+        );
+        execSync(
+          "echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list",
+          { stdio: "inherit" }
+        );
+        execSync("sudo apt-get update && sudo apt-get install -y cloudflared", { stdio: "inherit" });
+        const cloudflaredPath = findCloudflaredPath();
+        if (cloudflaredPath) {
+          console.log(`✅ cloudflared installed at: ${cloudflaredPath}`);
+          return cloudflaredPath;
+        }
+        return null;
+      } catch (error) {
+        console.error("❌ Failed to install cloudflared via APT");
+        return null;
+      }
+    } else if (pkgManager === "yum" || pkgManager === "dnf") {
+      console.log(`📦 Installing cloudflared via Cloudflare ${pkgManager.toUpperCase()} repository (official)...`);
+      try {
+        const cmd = pkgManager === "dnf" ? "dnf" : "yum";
+        execSync(
+          `curl -fsSL https://pkg.cloudflare.com/cloudflared.repo | sudo tee /etc/yum.repos.d/cloudflared.repo`,
+          { stdio: "inherit" }
+        );
+        execSync(`sudo ${cmd} update -y && sudo ${cmd} install -y cloudflared`, { stdio: "inherit" });
+        const cloudflaredPath = findCloudflaredPath();
+        if (cloudflaredPath) {
+          console.log(`✅ cloudflared installed at: ${cloudflaredPath}`);
+          return cloudflaredPath;
+        }
+        return null;
+      } catch (error) {
+        console.error(`❌ Failed to install cloudflared via ${pkgManager.toUpperCase()}`);
+        return null;
+      }
+    } else {
+      console.log("⚠️  No supported package manager found (apt, yum, or dnf)");
+      console.log("   Falling back to manual .deb download...");
+      try {
+        execSync(
+          "curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i /tmp/cloudflared.deb",
+          { stdio: "inherit" }
+        );
+        const cloudflaredPath = findCloudflaredPath();
+        if (cloudflaredPath) {
+          console.log(`✅ cloudflared installed at: ${cloudflaredPath}`);
+          return cloudflaredPath;
+        }
+        return null;
+      } catch (error) {
+        console.error("❌ Failed to install cloudflared");
+        return null;
+      }
+    }
+  } else if (platform === "win32") {
+    console.log("📦 Installing cloudflared via winget (official)...");
+    console.log("   Note: Windows support is experimental");
     try {
-      execSync(
-        "curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i /tmp/cloudflared.deb",
-        { stdio: "inherit" }
-      );
-      return true;
+      execSync("winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements", { stdio: "inherit" });
+      console.log("✅ cloudflared installed via winget");
+      console.log("   Location: C:\\Program Files (x86)\\cloudflared\\cloudflared.exe");
+      return "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe";
     } catch (error) {
-      console.error("❌ Failed to install cloudflared");
-      return false;
+      console.error("❌ Failed to install cloudflared via winget");
+      console.log("   Please install manually from:");
+      console.log("   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/");
+      return null;
     }
   } else {
-    console.log("⚠️  Automatic installation not supported on Windows");
+    console.log(`⚠️  Automatic installation not supported on platform: ${platform}`);
     console.log("   Please install cloudflared manually from:");
-    console.log("   https://github.com/cloudflare/cloudflared/releases");
-    return false;
+    console.log("   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/");
+    return null;
   }
 }
 
@@ -237,8 +357,9 @@ function loadConfig(): TunnelConfig | null {
 
 async function setupCloudflare(options: CliOptions): Promise<void> {
   if (options.noTui) {
-    // Non-interactive mode
-    if (!isCloudflaredInstalled()) {
+    const cloudflaredPath = findCloudflaredPath();
+
+    if (!cloudflaredPath) {
       const output = {
         status: "error",
         message: "cloudflared not installed",
@@ -256,6 +377,7 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
         mode: "custom",
         domain: options.domain,
         tunnelName: `opencode-mobile-${options.domain.replace(/\./g, "-")}`,
+        cloudflaredPath,
       };
       saveConfig(config);
       console.log(
@@ -281,10 +403,11 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
     } else {
       console.log("ℹ️  Using Cloudflare free tier (trycloudflare.com)");
       console.log("   For custom domains, provide --cloudflare-authtoken and --domain\n");
-      
+
       const config: TunnelConfig = {
         provider: "cloudflare",
         mode: "free",
+        cloudflaredPath,
       };
       saveConfig(config);
       console.log(
@@ -305,12 +428,14 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
   // Interactive mode
   console.log("\n☁️  Cloudflare Tunnel Setup\n");
 
-  if (!isCloudflaredInstalled()) {
+  let cloudflaredPath = findCloudflaredPath();
+
+  if (!cloudflaredPath) {
     console.log("⚠️  cloudflared is not installed.");
     console.log("📦 Attempting automatic installation...\n");
-    
-    const success = await installCloudflared();
-    if (!success) {
+
+    cloudflaredPath = await installCloudflared();
+    if (!cloudflaredPath) {
       console.log("\n❌ Automatic installation failed.");
       console.log("   Please install cloudflared manually:");
       console.log("   macOS: brew install cloudflared");
@@ -321,7 +446,7 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
     }
   }
 
-  console.log("\n✅ cloudflared is installed!");
+  console.log(`\n✅ cloudflared found at: ${cloudflaredPath}`);
   console.log("\nCloudflare offers two modes:");
   console.log("  1) Free tier (trycloudflare.com) - No account needed");
   console.log("  2) Custom domain - Requires Cloudflare account + domain\n");
@@ -332,6 +457,7 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
     const config: TunnelConfig = {
       provider: "cloudflare",
       mode: "free",
+      cloudflaredPath,
     };
     saveConfig(config);
     console.log("\n✅ Cloudflare configured for free tier!");
@@ -361,6 +487,7 @@ async function setupCloudflare(options: CliOptions): Promise<void> {
       mode: "custom",
       domain,
       tunnelName: `opencode-mobile-${domain.replace(/\./g, "-")}`,
+      cloudflaredPath,
     };
     saveConfig(config);
     console.log("\n✅ Cloudflare configured with custom domain!");

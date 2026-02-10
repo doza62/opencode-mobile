@@ -9,6 +9,9 @@
  */
 
 import { spawn, ChildProcess, execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import type { TunnelConfig, TunnelInfo } from "./types";
 
 // Export types for external use
@@ -19,12 +22,44 @@ let _process: ChildProcess | null = null;
 let _url: string | null = null;
 
 // Default paths for cloudflared
-const CLOUDFLARED_PATHS = [
-  "/usr/local/bin/cloudflared",
-  "/usr/bin/cloudflared",
-  `${process.env.HOME || ""}/.cloudflared/cloudflared`,
-  "/opt/homebrew/bin/cloudflared",
-];
+const CLOUDFLARED_PATHS = (() => {
+  const platform = process.platform;
+  if (platform === "win32") {
+    return [
+      "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe",
+      "C:\\Program Files\\cloudflared\\cloudflared.exe",
+      `${process.env.USERPROFILE}\\scoop\\shims\\cloudflared.exe`,
+    ];
+  }
+  return [
+    "/opt/homebrew/bin/cloudflared",
+    "/usr/local/bin/cloudflared",
+    "/usr/bin/cloudflared",
+    `${process.env.HOME || ""}/.cloudflared/cloudflared`,
+    "/home/linuxbrew/.linuxbrew/bin/cloudflared",
+    `${process.env.HOME || ""}/.linuxbrew/bin/cloudflared`,
+  ];
+})();
+
+const CONFIG_FILE = path.join(os.homedir(), ".config", "opencode-mobile", "tunnel-config.json");
+
+interface SavedConfig {
+  provider?: string;
+  cloudflaredPath?: string;
+}
+
+function getSavedCloudflaredPath(): string | null {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const content = fs.readFileSync(CONFIG_FILE, "utf-8");
+      const config = JSON.parse(content) as SavedConfig;
+      if (config.cloudflaredPath && fs.existsSync(config.cloudflaredPath)) {
+        return config.cloudflaredPath;
+      }
+    }
+  } catch {}
+  return null;
+}
 
 /**
  * Find cloudflared binary (extracted for testability)
@@ -60,6 +95,7 @@ export function createCloudflareTunnel(
   }
 
   const spawnModule = spawnFn || spawn;
+  const cloudflaredPath = getSavedCloudflaredPath() || "cloudflared";
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
@@ -67,7 +103,7 @@ export function createCloudflareTunnel(
       60000
     );
 
-    const process = spawnModule("cloudflared", [
+    const process = spawnModule(cloudflaredPath, [
       "tunnel",
       "--url",
       `http://127.0.0.1:${config.port}`,
@@ -169,7 +205,10 @@ function isCloudflaredInPath(): boolean {
 }
 
 export async function isCloudflareInstalled(): Promise<boolean> {
-  return findCloudflared() !== null || isCloudflaredInPath();
+  const foundInPaths = findCloudflared() !== null;
+  const foundInPath = isCloudflaredInPath();
+  const foundInConfig = getSavedCloudflaredPath() !== null;
+  return foundInPaths || foundInPath || foundInConfig;
 }
 
 /**
