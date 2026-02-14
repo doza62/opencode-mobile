@@ -35,6 +35,34 @@ describe("formatNotification", () => {
     expect(formatNotification(event, SERVER_URL)).toBeNull();
   });
 
+  it("skips notifications for child sessions (properties.info.parentID)", () => {
+    const event: NotificationEvent = {
+      type: "session.error",
+      properties: {
+        info: {
+          parentID: "parent-1",
+        },
+        title: "Child session",
+        error: "boom",
+      },
+    };
+
+    expect(formatNotification(event, SERVER_URL)).toBeNull();
+  });
+
+  it("skips notifications for child sessions (event.parentSessionID)", () => {
+    const event: NotificationEvent = {
+      type: "session.idle",
+      parentSessionID: "parent-1",
+      properties: {
+        title: "Child session",
+        lastAssistantMessage: "done",
+      },
+    };
+
+    expect(formatNotification(event, SERVER_URL)).toBeNull();
+  });
+
   it("skips notifications for bracket-tagged sessions", () => {
     const event: NotificationEvent = {
       type: "session.error",

@@ -267,9 +267,15 @@ async function enrichEventForNotification(
     null;
   const existingLast = typeof props.lastAssistantMessage === "string" ? props.lastAssistantMessage : "";
   const existingDirectory = typeof props.directory === "string" ? props.directory : "";
+  const existingParent =
+    (typeof props.parentSessionId === "string" && props.parentSessionId) ||
+    (typeof props.parentSessionID === "string" && props.parentSessionID) ||
+    (typeof props.parentId === "string" && props.parentId) ||
+    (typeof props.parentID === "string" && props.parentID) ||
+    "";
 
   try {
-    if (!existingTitle || !existingDirectory) {
+    if (!existingTitle || !existingDirectory || !existingParent) {
       const sessionInfo = await fetchJson(
         `${baseUrl}/session/${encodeURIComponent(sessionID)}`,
         1200,
@@ -277,6 +283,12 @@ async function enrichEventForNotification(
 
       const title = pickString(sessionInfo, "title");
       const directory = pickString(sessionInfo, "directory");
+      const parentSessionId =
+        pickString(sessionInfo, "parentSessionId") ||
+        pickString(sessionInfo, "parentSessionID") ||
+        pickString(sessionInfo, "parentId") ||
+        pickString(sessionInfo, "parentID") ||
+        "";
 
       if (!existingTitle && title) {
         props.title = title;
@@ -286,6 +298,13 @@ async function enrichEventForNotification(
       if (!existingDirectory && directory) {
         props.directory = directory;
         props.projectPath = directory;
+      }
+
+      if (!existingParent && parentSessionId) {
+        props.parentSessionId = parentSessionId;
+        props.parentSessionID = parentSessionId;
+        props.parentId = parentSessionId;
+        props.parentID = parentSessionId;
       }
     }
   } catch (error: unknown) {

@@ -48,7 +48,9 @@ export interface NotificationEvent {
   sessionId?: string;
   sessionID?: string;
   parentSessionId?: string;
+  parentSessionID?: string;
   parentId?: string;
+  parentID?: string;
 }
 
 export interface PluginContext {

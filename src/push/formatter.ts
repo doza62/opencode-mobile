@@ -24,7 +24,9 @@ interface EventProperties {
     sessionID?: string;
     id?: string;
     parentSessionId?: string;
+    parentSessionID?: string;
     parentId?: string;
+    parentID?: string;
   };
   // Top-level properties
   projectPath?: string;
@@ -37,6 +39,7 @@ interface EventProperties {
   parentSessionId?: string;
   parentId?: string;
   parentSessionID?: string;
+  parentID?: string;
   title?: string;
   sessionTitle?: string;
   summary?: string;
@@ -110,15 +113,25 @@ export function extractSessionId(event: NotificationEvent): string | null {
  */
 export function isChildSession(event: NotificationEvent): boolean {
   const properties = event.properties as EventProperties;
-  return !!(
+  const parentRef =
     properties?.parentSessionId ||
-    properties?.parentId ||
     properties?.parentSessionID ||
+    properties?.parentId ||
+    properties?.parentID ||
     event?.parentSessionId ||
+    event?.parentSessionID ||
     event?.parentId ||
+    event?.parentID ||
     properties?.info?.parentSessionId ||
-    properties?.info?.parentId
-  );
+    properties?.info?.parentSessionID ||
+    properties?.info?.parentId ||
+    properties?.info?.parentID;
+
+  if (typeof parentRef === "string") {
+    return parentRef.trim().length > 0;
+  }
+
+  return !!parentRef;
 }
 
 function extractSessionTitle(properties: EventProperties): string | null {
