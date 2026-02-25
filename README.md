@@ -2,6 +2,13 @@
 
 Mobile push notifications for OpenCode via Expo. Connect your phone to receive notifications when OpenCode generates responses, even when you're away from your computer.
 
+## Release Notes (v1.2.x -> v1.3.10)
+
+- Added `update` command support: `npx opencode-mobile update` (with `--check` mode)
+- Installer now supports automation-friendly flags: `--yes`, `--provider`, `--skip-update-check`, and token/domain options
+- Added notification filtering controls via `npx opencode-mobile filters`
+- Improved Cloudflare setup: official package repos on Linux, Homebrew flow on macOS, and winget support on Windows
+
 ## Prerequisites
 
 - [OpenCode CLI](https://opencode.ai) installed and configured
@@ -49,7 +56,7 @@ opencode serve
 
 **What you'll see:**
 ```
-[opencode-mobile] v1.3.2
+[opencode-mobile] v1.3.10
 [PushPlugin][Mobile] Entry loaded: index.ts
 
 Connecting to OpenCode...
@@ -106,9 +113,13 @@ https://your-tunnel-url.ngrok.io
 
 | Command | Description |
 |---------|-------------|
+| `npx opencode-mobile install [options]` | Install plugin and `/mobile` command globally |
+| `npx opencode-mobile update [--check]` | Check for updates or install the latest version |
+| `npx opencode-mobile filters <status\|enable\|disable>` | Manage session notification filters |
 | `/mobile` | Display QR code for mobile connection |
 | `/mobile ExponentPushToken[xxx]` | Manually register a push token |
-| `npx opencode-mobile qr <tunnels.json>` | Show QR from tunnel file |
+| `npx opencode-mobile qr <tunnels.json>` | Show QR from tunnel metadata JSON |
+| `npx opencode-mobile-tunnel-setup [options]` | Configure tunnel provider interactively or non-interactively |
 | `npx opencode-mobile audit` | Run endpoint audit |
 | `npx opencode-mobile uninstall` | Remove plugin globally |
 
@@ -126,9 +137,22 @@ https://your-tunnel-url.ngrok.io
 
 The plugin automatically tries providers in this order:
 
-1. **ngrok** - Popular tunnel service (requires auth token)
-2. **Cloudflare** - Zero-config tunnel via cloudflared
+1. **Cloudflare** - Recommended, secure default
+2. **ngrok** - Popular tunnel service (requires auth token)
 3. **Localtunnel** - Simple, free tunnel option
+
+### Automated/CI Install Examples
+
+```bash
+# Non-interactive install using Cloudflare
+npx opencode-mobile install --yes --provider cloudflare
+
+# Skip update checks in CI
+npx opencode-mobile install --yes --provider cloudflare --skip-update-check
+
+# Non-interactive ngrok setup
+npx opencode-mobile install --yes --provider ngrok --ngrok-authtoken YOUR_TOKEN
+```
 
 ### Installing ngrok (Optional)
 
@@ -151,11 +175,11 @@ ngrok config add-authtoken YOUR_TOKEN
 **Solutions:**
 ```bash
 # Check tunnel provider is installed
-which ngrok
-which cloudflared
+command -v ngrok
+command -v cloudflared
 
 # Run tunnel setup manually
-npx opencode-mobile tunnel-setup
+npx opencode-mobile-tunnel-setup
 
 # Or skip tunnel setup during install
 npx opencode-mobile install --skip-tunnel-setup

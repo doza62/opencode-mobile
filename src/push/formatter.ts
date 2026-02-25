@@ -110,28 +110,37 @@ export function extractSessionId(event: NotificationEvent): string | null {
 
 /**
  * Check if event is a child session
+ * Checks multiple possible locations for parent session references
  */
 export function isChildSession(event: NotificationEvent): boolean {
   const properties = event.properties as EventProperties;
-  const parentRef =
-    properties?.parentSessionId ||
-    properties?.parentSessionID ||
-    properties?.parentId ||
-    properties?.parentID ||
-    event?.parentSessionId ||
-    event?.parentSessionID ||
-    event?.parentId ||
-    event?.parentID ||
-    properties?.info?.parentSessionId ||
-    properties?.info?.parentSessionID ||
-    properties?.info?.parentId ||
-    properties?.info?.parentID;
-
-  if (typeof parentRef === "string") {
-    return parentRef.trim().length > 0;
+  
+  // Check all possible parent ID locations
+  const checks = [
+    { location: 'properties.parentSessionId', value: properties?.parentSessionId },
+    { location: 'properties.parentSessionID', value: properties?.parentSessionID },
+    { location: 'properties.parentId', value: properties?.parentId },
+    { location: 'properties.parentID', value: properties?.parentID },
+    { location: 'event.parentSessionId', value: event?.parentSessionId },
+    { location: 'event.parentSessionID', value: event?.parentSessionID },
+    { location: 'event.parentId', value: event?.parentId },
+    { location: 'event.parentID', value: event?.parentID },
+    { location: 'properties.info.parentSessionId', value: properties?.info?.parentSessionId },
+    { location: 'properties.info.parentSessionID', value: properties?.info?.parentSessionID },
+    { location: 'properties.info.parentId', value: properties?.info?.parentId },
+    { location: 'properties.info.parentID', value: properties?.info?.parentID },
+  ];
+  
+  for (const check of checks) {
+    const value = check.value;
+    if (typeof value === 'string' && value.trim().length > 0) {
+      debugLog(`[isChildSession] Found parent ID at ${check.location}: ${value}`);
+      return true;
+    }
   }
-
-  return !!parentRef;
+  
+  debugLog('[isChildSession] No parent ID found - not a child session');
+  return false;
 }
 
 function extractSessionTitle(properties: EventProperties): string | null {
@@ -195,6 +204,7 @@ export function formatNotification(
 
   const sessionTitleForFiltering = extractSessionTitle(properties);
   if (isChildSession(event)) {
+    debugLog(`[formatNotification] Filtering child session (sessionId: ${sessionId || 'unknown'})`);
     return null;
   }
 
