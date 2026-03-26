@@ -21,15 +21,16 @@ function getPluginVersion(): string {
   }
 }
 
-// Log version immediately on module load (before any other code runs)
-console.log(`[opencode-mobile] v${getPluginVersion()}`);
-
 const DEBUG_ENABLED = process.env.OPENCODE_MOBILE_DEBUG === "1";
 const debugLog = (...args: unknown[]): void => {
   if (DEBUG_ENABLED) {
     console.log(...args);
   }
 };
+
+// Log version in debug mode only — do NOT use console.log here.
+// Top-level stdout writes during module load corrupt the OpenCode TUI (blank screen bug).
+debugLog(`[opencode-mobile] v${getPluginVersion()}`);
 
 debugLog("\n=== opencode-mobile DEV ===");
 debugLog("LAN-only architecture: plugin handles push tokens, tunnel goes to OpenCode directly");
@@ -744,7 +745,8 @@ async function startServer(port: number, openCodePort: number): Promise<boolean>
 }
 
 export const PushNotificationPlugin: Plugin = async (ctx) => {
-  console.log("[opencode-mobile] Plugin init called");
+  // Do NOT use console.log here — stdout writes after TUI starts cause a blank screen.
+  debugLog("[opencode-mobile] Plugin init called");
   debugLog("[PushPlugin][Mobile] Initialized");
 
   logPluginVersion(ctx);
@@ -808,7 +810,10 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
     const tunnel = await startTunnelWithFallback(openCodePort);
     debugLog("[DEV] Tunnel started:", tunnel.url);
     activeTunnel = tunnel;
-    await displayQRCode(tunnel.url);
+    // NOTE: Do NOT call displayQRCode() here — printing to stdout while the
+    // TUI is running corrupts the display (blank screen bug).
+    // The tunnel URL is persisted to metadata below; users can get the QR
+    // by typing /mobile in the OpenCode session.
 
     // Save tunnel metadata to .config/opencode/tunnel.json
     updateTunnelMetadata(
@@ -819,7 +824,7 @@ export const PushNotificationPlugin: Plugin = async (ctx) => {
       openCodePort
     );
   } catch (tunnelError: any) {
-    console.error("[DEV] Failed to start tunnel:", tunnelError.message);
+    debugLog("[DEV] Failed to start tunnel:", tunnelError.message);
   }
 
   return {

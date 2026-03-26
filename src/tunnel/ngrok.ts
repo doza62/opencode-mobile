@@ -198,6 +198,12 @@ export async function ensureNgrokReady(): Promise<{ ready: boolean; authtoken: s
   }
 
   if (!diagnostics.authtokenConfigured || diagnostics.error) {
+    // Only offer interactive setup when stdin is a real terminal (TTY).
+    // When running inside the OpenCode plugin context stdin belongs to the TUI;
+    // creating a readline interface there hijacks it and causes a blank screen.
+    if (!process.stdin.isTTY) {
+      return { ready: false, authtoken: null };
+    }
     const authtoken = await setupNgrokWithUserInput();
     return { ready: !!authtoken, authtoken };
   }
@@ -507,12 +513,23 @@ export async function stopNgrok(): Promise<void> {
 }
 
 /**
- * Check if ngrok SDK is available
+ * Check if a real ngrok binary is available in PATH.
+ *
+ * Previously this only checked whether the @ngrok/ngrok npm package could be
+ * imported, which always returned true because the package is a listed dependency
+ * of opencode-mobile itself.  That caused the auto-tunnel logic to always attempt
+ * ngrok, which led to ensureNgrokReady() invoking setupNgrokWithUserInput(), which
+ * created a readline interface on process.stdin — hijacking stdin from the OpenCode
+ * TUI and producing a blank screen.
+ *
+ * Checking for the actual binary ensures we only attempt ngrok when it is genuinely
+ * installed and ready to use.
  */
 export async function isNgrokInstalled(): Promise<boolean> {
   try {
-    await import("@ngrok/ngrok");
-    return true;
+    const { spawnSync } = await import("child_process");
+    const result = spawnSync("ngrok", ["version"], { stdio: "ignore" });
+    return result.status === 0 && result.error === undefined;
   } catch {
     return false;
   }
