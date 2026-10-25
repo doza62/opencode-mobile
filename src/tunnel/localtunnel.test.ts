@@ -99,10 +99,9 @@ describe("localtunnel provider", () => {
         on: () => {},
       };
       
-      const mockModule = vi.fn((options, callback) => {
-        // Simulate async callback
-        setTimeout(() => callback(null, mockTunnel), 10);
-        return mockTunnel;
+      const mockModule = vi.fn(async () => {
+        // Simulate async resolution
+        return new Promise((resolve) => setTimeout(() => resolve(mockTunnel), 10));
       });
       
       const result = await createLocaltunnel(

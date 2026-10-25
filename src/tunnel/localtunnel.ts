@@ -35,42 +35,41 @@ export function createLocaltunnel(
     return Promise.reject(new Error("Invalid port: must be a number"));
   }
   
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error("Timeout waiting for localtunnel URL (30s)")),
       30000
     );
 
-    localtunnelModule(
-      { port: config.port, subdomain: config.subdomain },
-      (err: any, tunnel: any) => {
-        if (err) {
-          clearTimeout(timeout);
-          reject(new Error(`Localtunnel failed: ${err.message}`));
-          return;
-        }
+    try {
+      const tunnel = await localtunnelModule({
+        port: config.port,
+        subdomain: config.subdomain,
+      });
 
-        clearTimeout(timeout);
-        _instance = tunnel;
-        
-        if (onUrl) {
-          onUrl(tunnel.url);
-        } else {
-          console.log("[Tunnel] URL:", tunnel.url);
-        }
+      clearTimeout(timeout);
+      _instance = tunnel;
 
-        tunnel.on("close", () => {
-          _instance = null;
-        });
-
-        resolve({
-          url: tunnel.url,
-          tunnelId: tunnel.url.split("://")[1].split(".")[0],
-          port: config.port,
-          provider: "localtunnel",
-        });
+      if (onUrl) {
+        onUrl(tunnel.url);
+      } else {
+        console.log("[Tunnel] URL:", tunnel.url);
       }
-    );
+
+      tunnel.on("close", () => {
+        _instance = null;
+      });
+
+      resolve({
+        url: tunnel.url,
+        tunnelId: tunnel.url.split("://")[1].split(".")[0],
+        port: config.port,
+        provider: "localtunnel",
+      });
+    } catch (err: any) {
+      clearTimeout(timeout);
+      reject(new Error(`Localtunnel failed: ${err.message}`));
+    }
   });
 }
 

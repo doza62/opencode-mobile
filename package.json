@@ -68,12 +68,9 @@
   "dependencies": {
     "@ngrok/ngrok": "^1.7.0",
     "@opencode-ai/plugin": "^1.1.12",
-    "cloudflared": "^0.1.1",
-    "cloudflared-tunnel": "^1.0.3",
     "expo": "^54.0.31",
     "jsonc-parser": "^3.3.1",
-    "localtunnel": "^1.8.3",
-    "ngrok": "^5.0.0-beta.2",
+    "localtunnel": "^2.0.2",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
   },
