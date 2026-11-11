@@ -3,6 +3,7 @@
  */
 
 import * as fs from "fs";
+import { getHomeDir } from "../utils/home";
 import { spawn } from "child_process";
 import { promisify } from "util";
 import { exec } from "child_process";
@@ -20,7 +21,7 @@ const execAsync = promisify(exec);
 const CLOUDFLARED_PATHS = [
   "/usr/local/bin/cloudflared",
   "/usr/bin/cloudflared",
-  `${process.env.HOME || ""}/.cloudflared/cloudflared`,
+  `${getHomeDir()}/.cloudflared/cloudflared`,
   "/opt/homebrew/bin/cloudflared",
 ];
 
@@ -95,8 +96,8 @@ async function testNgrok(
   // Test 2: Check configuration
   const startConfig = Date.now();
   const configPaths = [
-    `${process.env.HOME}/Library/Application Support/ngrok/ngrok.yml`,
-    `${process.env.HOME}/.config/ngrok/ngrok.yml`,
+    `${getHomeDir()}/Library/Application Support/ngrok/ngrok.yml`,
+    `${getHomeDir()}/.config/ngrok/ngrok.yml`,
     "/etc/ngrok/ngrok.yml",
   ];
 
@@ -225,8 +226,8 @@ async function testCloudflare(
   // Test 2: Check configuration (optional)
   const startConfig = Date.now();
   const cloudflareConfigPaths = [
-    `${process.env.HOME}/.cloudflared/config.yml`,
-    `${process.env.HOME}/.cloudflared/creds`,
+    `${getHomeDir()}/.cloudflared/config.yml`,
+    `${getHomeDir()}/.cloudflared/creds`,
   ];
 
   let hasConfig = false;

@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
 import * as ngrok from "@ngrok/ngrok";
+import { getHomeDir } from "../utils/home";
 import type { TunnelConfig, TunnelInfo, NgrokDiagnostics } from "./types";
 
 let ngrokInstance: any = null;
@@ -34,8 +35,8 @@ export async function diagnoseNgrok(): Promise<NgrokDiagnostics> {
   }
 
   const configPaths = [
-    `${process.env.HOME}/Library/Application Support/ngrok/ngrok.yml`,
-    `${process.env.HOME}/.config/ngrok/ngrok.yml`,
+    `${getHomeDir()}/Library/Application Support/ngrok/ngrok.yml`,
+    `${getHomeDir()}/.config/ngrok/ngrok.yml`,
     "/etc/ngrok/ngrok.yml",
   ];
 
@@ -151,8 +152,8 @@ async function setupNgrokWithUserInput(): Promise<string | null> {
         try {
           const { writeFileSync, existsSync, mkdirSync } = await import("fs");
           
-          const configPath = `${process.env.HOME}/Library/Application Support/ngrok/ngrok.yml`;
-          const configDir = `${process.env.HOME}/Library/Application Support/ngrok`;
+          const configPath = `${getHomeDir()}/Library/Application Support/ngrok/ngrok.yml`;
+          const configDir = `${getHomeDir()}/Library/Application Support/ngrok`;
           
           if (!existsSync(configDir)) {
             mkdirSync(configDir, { recursive: true });
@@ -283,8 +284,8 @@ export async function startNgrokTunnel(config: TunnelConfig): Promise<TunnelInfo
 
   // Get config path for debugging
   const configPaths = [
-    `${process.env.HOME}/Library/Application Support/ngrok/ngrok.yml`,
-    `${process.env.HOME}/.config/ngrok/ngrok.yml`,
+    `${getHomeDir()}/Library/Application Support/ngrok/ngrok.yml`,
+    `${getHomeDir()}/.config/ngrok/ngrok.yml`,
     "/etc/ngrok/ngrok.yml",
   ];
   let activeConfigPath = "none";

@@ -12,6 +12,7 @@ import { spawn, ChildProcess, execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { getHomeDir } from "../utils/home";
 import type { TunnelConfig, TunnelInfo } from "./types";
 
 // Export types for external use
@@ -35,9 +36,9 @@ const CLOUDFLARED_PATHS = (() => {
     "/opt/homebrew/bin/cloudflared",
     "/usr/local/bin/cloudflared",
     "/usr/bin/cloudflared",
-    `${process.env.HOME || ""}/.cloudflared/cloudflared`,
+    `${getHomeDir()}/.cloudflared/cloudflared`,
     "/home/linuxbrew/.linuxbrew/bin/cloudflared",
-    `${process.env.HOME || ""}/.linuxbrew/bin/cloudflared`,
+    `${getHomeDir()}/.linuxbrew/bin/cloudflared`,
   ];
 })();
 

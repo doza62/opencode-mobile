@@ -5,8 +5,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { PushToken } from "./types";
+import { getHomeDir } from "../utils/home";
 
-const CONFIG_DIR = path.join(process.env.HOME || "", ".config/opencode");
+const CONFIG_DIR = path.join(getHomeDir(), ".config/opencode");
 const TOKEN_FILE = path.join(CONFIG_DIR, "push-tokens.json");
 
 /**

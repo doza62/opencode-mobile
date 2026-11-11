@@ -3,3 +3,4 @@
  */
 
 export * from "./port";
+export * from "./home";

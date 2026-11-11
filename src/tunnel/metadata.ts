@@ -4,8 +4,9 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { getHomeDir } from "../utils/home";
 
-const CONFIG_DIR = path.join(process.env.HOME || "", ".config/opencode");
+const CONFIG_DIR = path.join(getHomeDir(), ".config/opencode");
 const TUNNEL_METADATA_FILE = path.join(CONFIG_DIR, "tunnel.json");
 
 export interface TunnelMetadata {

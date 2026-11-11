@@ -3,6 +3,7 @@ import { spawn, execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { getHomeDir } from "../utils/home";
 import { createInterface } from "readline";
 
 const PROVIDERS = ["cloudflare", "ngrok", "localtunnel", "none"] as const;
@@ -170,7 +171,7 @@ function findCloudflaredPath(): string | null {
     "/opt/homebrew/bin/cloudflared",
     "/usr/local/bin/cloudflared",
     "/usr/bin/cloudflared",
-    `${process.env.HOME}/.linuxbrew/bin/cloudflared`,
+    `${getHomeDir()}/.linuxbrew/bin/cloudflared`,
     "/home/linuxbrew/.linuxbrew/bin/cloudflared",
   ];
 

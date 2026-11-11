@@ -3,6 +3,7 @@
  */
 
 import * as fs from "fs";
+import { getHomeDir } from "../utils/home";
 import type { TunnelConfig, TunnelInfo, TunnelDetails } from "./types";
 import { 
   startNgrokTunnel, 
@@ -140,8 +141,8 @@ export function getTunnelDetails(): TunnelDetails {
 
   // Get config path for ngrok
   const configPaths = [
-    `${process.env.HOME}/Library/Application Support/ngrok/ngrok.yml`,
-    `${process.env.HOME}/.config/ngrok/ngrok.yml`,
+    `${getHomeDir()}/Library/Application Support/ngrok/ngrok.yml`,
+    `${getHomeDir()}/.config/ngrok/ngrok.yml`,
     "/etc/ngrok/ngrok.yml",
   ];
 
